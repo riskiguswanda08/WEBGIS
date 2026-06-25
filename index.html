@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>AQUAMIN — Arutmin Quick Water Monitoring</title>
 <meta name="description" content="Sistem pemantauan level air real-time untuk seluruh pit tambang Arutmin">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%233B9EFF' d='M12 2C6.5 2 3 7 3 12s3.5 10 9 10 9-5 9-10S17.5 2 12 2z'/%3E%3C/svg%3E">
@@ -25,8 +25,33 @@
   --water-color:#0EA5E9;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden}
-body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--t1);font-size:13px;display:flex;flex-direction:column}
+html{height:100%}
+html,body{
+  /* --app-vh is set via JS to the real visual viewport height; this is far
+     more reliable across mobile browsers (iOS Safari, in-app WebViews like
+     Teams/SharePoint, Android Chrome) than 100vh/100dvh alone, which can
+     misbehave when the address bar / keyboard shows or hides. */
+  height: var(--app-vh, 100dvh);
+  overflow:hidden;
+  /* Prevent the whole page from being yanked around by pull-to-refresh or
+     elastic overscroll, which is the most common cause of "can't scroll
+     down" complaints on mobile — the bounce eats the gesture before it
+     reaches the inner scroll container. */
+  overscroll-behavior:none;
+  -webkit-text-size-adjust:100%;
+}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--t1);font-size:13px;display:flex;flex-direction:column;position:relative}
+
+/* Every internal scroll container gets the same treatment: momentum
+   scrolling on iOS, contained overscroll so scrolling a chart list doesn't
+   bubble up and lock the outer shell, and explicit touch-action so the
+   browser doesn't have to guess (and sometimes guess wrong) which axis to
+   hand to the page vs. to native gesture handling. */
+.dash-scroll,.ana-scroll,.rain-scroll,.trend-scroll,.tbl-wrap,.modal{
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  touch-action:pan-y;
+}
 
 /* ── LOADING ── */
 #loadScreen{position:fixed;inset:0;background:var(--bg0);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;transition:opacity .5s}
@@ -87,7 +112,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
 .panel.on{display:flex}
 
 /* ── SCROLLABLE CONTENT ── */
-.dash-scroll,.ana-scroll,.rain-scroll,.trend-scroll{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px}
+.dash-scroll,.ana-scroll,.rain-scroll,.trend-scroll{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px;min-height:0}
 .dash-scroll::-webkit-scrollbar,.ana-scroll::-webkit-scrollbar,.rain-scroll::-webkit-scrollbar,.trend-scroll::-webkit-scrollbar{width:3px}
 .dash-scroll::-webkit-scrollbar-thumb,.ana-scroll::-webkit-scrollbar-thumb,.rain-scroll::-webkit-scrollbar-thumb,.trend-scroll::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:2px}
 
@@ -316,6 +341,14 @@ td.te{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px}
   .hdr-status{display:none}
   .tab span{display:none}
   .kpi-n{font-size:18px}
+  .kpi{min-width:78px;padding:0 6px}
+}
+
+/* Slightly larger phones still benefit from tighter spacing */
+@media(max-width:480px){
+  .area-grid,.contractor-grid,.trend-mini-grid,.gauge-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  .modal-fields{grid-template-columns:1fr 1fr}
+  .chart-wrap{height:200px}
 }
 
 /* Animate on entry */
@@ -462,8 +495,8 @@ td.te{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px}
   </div>
   <div class="trend-scroll">
     <div class="water-chart-container">
-      <div class="chart-title">📈 Tren Level Air — Riwayat Mingguan</div>
-      <div class="chart-sub">Grafik elevasi level air seluruh pit dari data mingguan (W14–W25). Klik pit di bawah untuk fokus.</div>
+      <div class="chart-title">📈 Tren Level Air — Riwayat Pengukuran</div>
+      <div class="chart-sub" id="trendChartSub">Grafik elevasi level air seluruh pit berdasarkan data periode pengukuran. Klik pit di bawah untuk fokus.</div>
       <div class="trend-chart-wrap"><canvas id="chartTrendMain"></canvas></div>
     </div>
     <div>
@@ -627,8 +660,67 @@ const SHEET_PUBHTML = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-Ih-WeH
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
 // Weekly columns W14–W25
-const WEEK_COLS = ['W14','W15','W16','W17','W18','W19','W20','W21','W22','W23','W24','W25'];
-const WEEK_LABELS = WEEK_COLS.map(w => `Minggu ${w.replace('W','')}`);
+// Kolom-kolom yang punya arti spesifik dan BUKAN kolom elevasi mingguan.
+// Apa pun selain ini, jika isinya berupa angka, dianggap sebagai kolom
+// pengukuran elevasi periodik (baik diberi nama "W14", tanggal seperti
+// "2026-06-15", atau format apa pun yang dipakai pada update sheet).
+const KNOWN_COLS = new Set([
+  'no','easting','northing','delta elevasi (m)','area','pit','kondisi',
+  'volume (m3)','tanggal update terakhir','status','jumlah pompa aktif',
+  'curah hujan (mm)','target elevasi (m)','kondisi pompa','catatan','link foto',
+  'kontraktor','keterangan','elevation','elevasi'
+]);
+let WEEK_COLS = []; // populated dynamically once headers are known
+
+// Mendeteksi kolom-kolom elevasi periodik secara otomatis dari header CSV.
+// Ini membuat AQUAMIN tahan terhadap perubahan format: entah kolom dinamai
+// "W14".."W25", atau tanggal aktual seperti "2026-06-15", "06/15/2026", dst —
+// selama isinya mayoritas berupa angka dan namanya bukan kolom yang sudah dikenal.
+//
+// Catatan penting: kolom periode yang headernya berupa TANGGAL VALID selalu
+// dianggap kolom minggu meski seluruh isinya masih kosong — ini terjadi wajar
+// untuk minggu-minggu mendatang yang belum diukur. Untuk header yang BUKAN
+// tanggal (misal "W14"), kita tetap mensyaratkan ada data numerik supaya
+// kolom non-elevasi yang kebetulan kosong tidak ikut terdeteksi.
+function detectWeekColumns(rows){
+  if(!rows.length) return [];
+  const headers = Object.keys(rows[0]);
+  const candidates = headers.filter(h=>{
+    const key = h.toLowerCase().trim();
+    if(KNOWN_COLS.has(key)) return false;
+    if(key==='') return false;
+    const looksLikeDate = !isNaN(new Date(h)) && /\d{4}/.test(h);
+    if(looksLikeDate) return true; // future/empty weeks still count
+    let numericCount=0, filledCount=0;
+    for(const row of rows){
+      const v = row[h];
+      if(v===undefined||v===null||v==='') continue;
+      filledCount++;
+      if(parseFlexNum(v)!==null) numericCount++;
+    }
+    return filledCount>0 && (numericCount/filledCount)>=0.6;
+  });
+  const asDates = candidates.map(h=>({h,d:new Date(h)}));
+  const allValidDates = asDates.every(x=>!isNaN(x.d));
+  if(allValidDates && candidates.length>1){
+    asDates.sort((a,b)=>a.d-b.d);
+    return asDates.map(x=>x.h);
+  }
+  return candidates;
+}
+
+// Format a week-column header into a short readable label for charts/UI,
+// e.g. a Date-like header "2026-06-15" -> "15 Jun", or pass through "W14".
+function weekLabel(h){
+  const d = new Date(h);
+  if(!isNaN(d) && /\d{4}/.test(String(h))){
+    return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});
+  }
+  return String(h);
+}
+// Returns human-friendly chart labels for the currently detected week columns.
+// Recomputed on demand since WEEK_COLS is only known after the sheet loads.
+function getWeekLabels(){ return WEEK_COLS.map(weekLabel); }
 
 const RAIN_STATIONS = [
   {name:'Satui',lat:-3.83,lng:115.47},
@@ -702,6 +794,30 @@ function toLL(e,n){
     if(lat>-12&&lat<5&&lng>105&&lng<120)return[lat,lng];
   }catch(x){}
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// VIEWPORT HEIGHT FIX (mobile scroll reliability)
+// ─────────────────────────────────────────────────────────────
+// Mobile browsers — especially in-app WebViews used by SharePoint/Teams —
+// are inconsistent about 100vh/100dvh, particularly when the address bar
+// or on-screen keyboard changes the visible area. We measure the *real*
+// visible viewport via the visualViewport API (with a window.innerHeight
+// fallback for older browsers) and feed it into a CSS variable that the
+// whole app layout is built on. This is what actually fixes "I can't
+// scroll down to see some charts on mobile" — the outer shell was
+// sometimes taller than the visible screen, hiding the scrollable area
+// below the fold with no way to reach it.
+function setAppHeight(){
+  const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  document.documentElement.style.setProperty('--app-vh', h + 'px');
+}
+setAppHeight();
+window.addEventListener('resize', setAppHeight);
+window.addEventListener('orientationchange', ()=>setTimeout(setAppHeight,150));
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', setAppHeight);
+  window.visualViewport.addEventListener('scroll', setAppHeight);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -789,6 +905,20 @@ function fmtD(s){
   catch{return s}
 }
 
+// Returns the most relevant "last updated" date for a pit: prefers the
+// explicit "Tanggal Update Terakhir" column, but falls back to the header
+// of the most recent week-column that actually has a value — this matters
+// because many rows in the sheet leave that column blank when nothing
+// beyond the routine weekly reading has happened.
+function getEffectiveUpdateDate(d){
+  const explicit = d['Tanggal Update Terakhir']||d['Tanggal Update']||'';
+  if(explicit) return explicit;
+  for(let i=WEEK_COLS.length-1;i>=0;i--){
+    if(parseFlexNum(d[WEEK_COLS[i]])!==null) return WEEK_COLS[i];
+  }
+  return '';
+}
+
 // ─────────────────────────────────────────────────────────────
 // LOAD DATA
 // ─────────────────────────────────────────────────────────────
@@ -804,6 +934,7 @@ async function loadData(){
         skipEmptyLines:true,
         complete(r){
           if(!r.data||!r.data.length) return rej('No data');
+          WEEK_COLS = detectWeekColumns(r.data);
           DATA = r.data.map(row=>{
             const e = row['Easting']||row['easting']||'';
             const n = row['Northing']||row['northing']||'';
@@ -832,7 +963,7 @@ async function loadData(){
     FILTERED = [...DATA];
     buildAll();
     const now = new Date();
-    document.getElementById('hdrStatus').textContent = `Sync ${now.toLocaleTimeString('id-ID')} · ${DATA.length} pit`;
+    document.getElementById('hdrStatus').textContent = `Sync ${now.toLocaleTimeString('id-ID')} · ${DATA.length} pit · periode ${getWeekLabels().slice(-1)[0]||'—'}`;
     showToast(`✓ ${DATA.length} pit berhasil dimuat`,'ok');
     document.getElementById('loadScreen').classList.add('hide');
   }catch(e){
@@ -856,6 +987,18 @@ function buildAll(){
   buildAnalysis();
   populateFilters();
   buildTrendPanel();
+  updatePeriodInfo();
+}
+
+function updatePeriodInfo(){
+  const el = document.getElementById('trendChartSub');
+  if(!el || !WEEK_COLS.length) return;
+  const labels = getWeekLabels();
+  if(labels.length>1){
+    el.textContent = `Grafik elevasi level air seluruh pit dari ${labels[0]} sampai ${labels[labels.length-1]} (${WEEK_COLS.length} titik data). Klik pit di bawah untuk fokus.`;
+  }else if(labels.length===1){
+    el.textContent = `Data elevasi periode ${labels[0]}. Klik pit di bawah untuk fokus.`;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -945,7 +1088,7 @@ function buildDashboard(){
           <div class="alert-icon" style="background:${d._sk==='overflow'?'rgba(255,79,79,.1)':'rgba(62,84,114,.2)'}">${d._sk==='overflow'?'🌊':'❓'}</div>
           <div class="alert-body">
             <div class="alert-name">${d['Pit']||'—'}</div>
-            <div class="alert-meta">${((d['Area']||d['Keterangan']||'').trim())||'—'} · ${d['Kontraktor']||'—'} · ${fmtD(d['Tanggal Update Terakhir']||d['Tanggal Update'])}</div>
+            <div class="alert-meta">${((d['Area']||d['Keterangan']||'').trim())||'—'} · ${d['Kontraktor']||'—'} · ${fmtD(getEffectiveUpdateDate(d))}</div>
           </div>
           <div class="alert-elev" style="color:${eCol(d._elev)}">${fmtE(d._elev)} m</div>
           ${badge(d._sk)}
@@ -1045,7 +1188,7 @@ function buildMainTrendChart(pits){
 
   charts.trendMain = new Chart(document.getElementById('chartTrendMain'),{
     type:'line',
-    data:{labels:WEEK_LABELS, datasets},
+    data:{labels:getWeekLabels(), datasets},
     options:{
       responsive:true,
       maintainAspectRatio:false,
@@ -1105,6 +1248,8 @@ function buildMiniTrends(pits){
     const trendIcon = trend==='rising'?'▲':trend==='falling'?'▼':'→';
     const elev = d._elev;
     const sk = d._sk;
+    const filledCount = d._weekly.filter(v=>v!==null).length;
+    const totalCount = d._weekly.length;
 
     const div = document.createElement('div');
     div.className = 'trend-mini';
@@ -1120,7 +1265,7 @@ function buildMiniTrends(pits){
           <div class="trend-mini-elev" style="color:${eCol(elev)}">${elev!==null?elev.toFixed(1):'—'}<span style="font-size:10px;color:var(--t3)">m</span></div>
           <div class="trend-mini-delta" style="color:${trendColor}">${trendIcon} ${delta!==null?(delta>0?'+':'')+delta.toFixed(2)+'m':'—'}</div>
         </div>
-        <div style="font-size:9px;color:var(--t3);text-align:right">${((d['Area']||d['Keterangan']||'').trim())||'—'}<br>${d['Kontraktor']||'—'}</div>
+        <div style="font-size:9px;color:var(--t3);text-align:right">${((d['Area']||d['Keterangan']||'').trim())||'—'}<br>${d['Kontraktor']||'—'}<br><span style="opacity:.7">${filledCount}/${totalCount} data</span></div>
       </div>
       <canvas id="${canvasId}" class="spark-canvas" height="36"></canvas>
     `;
@@ -1145,7 +1290,7 @@ function buildMiniTrends(pits){
       sparkCharts[canvasId] = new Chart(canvas,{
         type:'line',
         data:{
-          labels:WEEK_LABELS,
+          labels:getWeekLabels(),
           datasets:[{data:vals,borderColor:col,backgroundColor:grad,fill:true,tension:0.4,pointRadius:0,borderWidth:1.5,spanGaps:true}]
         },
         options:{
@@ -1277,6 +1422,11 @@ function sortTbl(key){
   FILTERED.sort((a,b)=>{
     if(key==='Elevation') return ((a._elev??Infinity*sortDir)-(b._elev??Infinity*sortDir))*sortDir;
     if(key==='Delta') return ((a._delta??Infinity*sortDir)-(b._delta??Infinity*sortDir))*sortDir;
+    if(key==='Tanggal Update Terakhir'){
+      const da=new Date(getEffectiveUpdateDate(a)), db=new Date(getEffectiveUpdateDate(b));
+      const va2=isNaN(da)?0:da.getTime(), vb2=isNaN(db)?0:db.getTime();
+      return (va2-vb2)*sortDir;
+    }
     let va=a[key]??'',vb=b[key]??'';
     if(typeof va==='string') return va.localeCompare(vb)*sortDir;
     return (va-vb)*sortDir;
@@ -1294,7 +1444,7 @@ function renderTable(){
     const delta = d._delta;
     const trendCol = d._trend==='rising'?'var(--red)':d._trend==='falling'?'var(--teal)':'var(--t3)';
     const trendArrow = d._trend==='rising'?'▲':d._trend==='falling'?'▼':'→';
-    const tglUpdate = d['Tanggal Update Terakhir']||d['Tanggal Update']||'';
+    const tglUpdate = getEffectiveUpdateDate(d);
     return `<tr onclick="showDetail(${idx})">
       <td class="tn">${d['Pit']||'—'}</td>
       <td>${((d['Area']||d['Keterangan']||'').trim())||'—'}</td>
@@ -1319,7 +1469,7 @@ function exportCSV(){
     d._delta!==null?d._delta.toFixed(3):'',
     d._sk,
     d['Kondisi']||'',
-    d['Tanggal Update Terakhir']||d['Tanggal Update']||''
+    getEffectiveUpdateDate(d)
   ]);
   const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
@@ -1409,7 +1559,7 @@ function showDetail(idx){
   const sk = d._sk;
   const col = hexCol[sk];
   const elev = d._elev;
-  const tglUpdate = d['Tanggal Update Terakhir']||d['Tanggal Update']||'';
+  const tglUpdate = getEffectiveUpdateDate(d);
 
   document.getElementById('mTitle').innerHTML = `${d['Pit']||'—'} ${badge(sk)}`;
 
@@ -1485,7 +1635,7 @@ function showDetail(idx){
 
     mTrendChart = new Chart(document.getElementById('mTrendChart'),{
       type:'line',
-      data:{labels:WEEK_LABELS,datasets},
+      data:{labels:getWeekLabels(),datasets},
       options:{
         responsive:true,maintainAspectRatio:false,
         animation:{duration:800,easing:'easeInOutCubic'},
@@ -1550,7 +1700,7 @@ function reportPit(idx){
     `Kontraktor: ${d['Kontraktor']||'—'}`,
     `Elevasi Terkini: ${fmtE(d._elev)} m`,
     `Delta: ${d._delta!==null?(d._delta>0?'+':'')+d._delta.toFixed(3)+'m':'—'}`,
-    `Tgl Update: ${fmtD(d['Tanggal Update Terakhir']||d['Tanggal Update']||'')}`,
+    `Tgl Update: ${fmtD(getEffectiveUpdateDate(d))}`,
     d._ll?`Lokasi: https://maps.google.com/?q=${d._ll[0]},${d._ll[1]}`:'',
   ].filter(Boolean).join('\n');
   if(navigator.clipboard){
