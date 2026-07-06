@@ -1,0 +1,3003 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>AQUAMIN — Arutmin Quick Water Monitoring</title>
+<meta name="description" content="Sistem pemantauan level air real-time untuk seluruh pit tambang Arutmin">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%233B9EFF' d='M12 2C6.5 2 3 7 3 12s3.5 10 9 10 9-5 9-10S17.5 2 12 2z'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+:root{
+  --bg0:#04080F;--bg1:#080E1A;--bg2:#0C1422;--bg3:#111B2E;--bg4:#172338;--bg5:#1E2D45;
+  --blue:#3B9EFF;--cyan:#00D4FF;--teal:#00E5C8;--amber:#FFB730;--red:#FF4F4F;--purple:#A78BFA;--green:#34D399;--indigo:#6366F1;
+  --blue-glow:rgba(59,158,255,.2);--cyan-glow:rgba(0,212,255,.15);--teal-glow:rgba(0,229,200,.15);
+  --amber-glow:rgba(255,183,48,.15);--red-glow:rgba(255,79,79,.15);--purple-glow:rgba(167,139,250,.15);
+  --t1:#EEF4FF;--t2:#8BA4C4;--t3:#3E5472;--t4:#1E2D45;
+  --r:8px;--rl:14px;--shadow:0 8px 32px rgba(0,0,0,.6);
+  --header-h:56px;--kpi-h:76px;--tab-h:46px;
+  --water-color:#0EA5E9;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{height:100%}
+html,body{
+  height: var(--app-vh, 100dvh);
+  overflow:hidden;
+  overscroll-behavior:none;
+  -webkit-text-size-adjust:100%;
+}
+body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg0);color:var(--t1);font-size:13.5px;line-height:1.5;display:flex;flex-direction:column;position:relative;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+
+.dash-scroll,.ana-scroll,.rain-scroll,.trend-scroll,.tbl-wrap,.modal{
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  touch-action:pan-y;
+}
+
+#loadScreen{position:fixed;inset:0;background:var(--bg0);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;transition:opacity .5s}
+#loadScreen.hide{opacity:0;pointer-events:none}
+.load-water{width:80px;height:80px;position:relative;margin-bottom:8px}
+.load-drop{width:50px;height:60px;background:linear-gradient(180deg,var(--cyan),var(--blue));border-radius:50% 50% 50% 50%/60% 60% 40% 40%;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);animation:dropPulse 1.5s ease-in-out infinite}
+.load-ring{position:absolute;inset:-8px;border:2px solid transparent;border-top-color:var(--cyan);border-right-color:var(--blue);border-radius:50%;animation:spin 1.2s linear infinite}
+@keyframes dropPulse{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-55%) scale(1.1)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-logo{font-size:26px;font-weight:900;letter-spacing:-1px;line-height:1}
+.load-logo span{background:linear-gradient(90deg,var(--cyan),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.load-bar{width:220px;height:2px;background:var(--bg4);border-radius:2px;overflow:hidden}
+.load-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--blue));border-radius:2px;animation:loadAnim 1.8s ease-in-out infinite}
+@keyframes loadAnim{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}
+.load-txt{font-size:11px;color:var(--t3);letter-spacing:.5px}
+
+#hdr{height:var(--header-h);background:rgba(8,14,26,.95);border-bottom:1px solid rgba(59,158,255,.12);display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0;gap:10px;z-index:100;backdrop-filter:blur(12px)}
+.brand{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.brand-logo{width:36px;height:36px;background:linear-gradient(135deg,#0A3D7A,var(--blue));border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 16px var(--blue-glow)}
+.brand-logo svg{width:20px;height:20px}
+.brand-name{font-size:17px;font-weight:900;letter-spacing:-.5px;line-height:1.1}
+.brand-name .aq{background:linear-gradient(90deg,var(--cyan),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.brand-sub{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.7px;margin-top:2px}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.live-pill{display:flex;align-items:center;gap:6px;background:rgba(0,229,200,.08);border:1px solid rgba(0,229,200,.2);border-radius:20px;padding:5px 11px;font-size:11px;color:var(--teal)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);box-shadow:0 0 6px var(--teal);animation:livePulse 2s infinite}
+@keyframes livePulse{0%,100%{opacity:1;box-shadow:0 0 6px var(--teal)}50%{opacity:.4;box-shadow:0 0 2px var(--teal)}}
+#liveClock{font-family:'JetBrains Mono',monospace;font-size:11px}
+#syncBtn{background:linear-gradient(135deg,var(--blue),var(--cyan));border:none;color:#fff;padding:6px 13px;border-radius:var(--r);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .2s;box-shadow:0 2px 12px var(--blue-glow);white-space:nowrap}
+#syncBtn:hover{transform:translateY(-1px);box-shadow:0 4px 20px var(--blue-glow)}
+#syncBtn svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+#syncBtn.spinning svg{animation:spin .7s linear infinite}
+.hdr-status{font-size:10px;color:var(--t3);white-space:nowrap;font-family:'JetBrains Mono',monospace}
+
+#ribbon{height:var(--kpi-h);background:var(--bg1);border-bottom:1px solid rgba(255,255,255,.04);display:flex;overflow-x:auto;flex-shrink:0;scrollbar-width:none}
+#ribbon::-webkit-scrollbar{display:none}
+.kpi{flex:1;min-width:100px;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:0 10px;border-right:1px solid rgba(255,255,255,.04);cursor:pointer;transition:all .2s;user-select:none;position:relative;overflow:hidden}
+.kpi:last-child{border-right:none}
+.kpi::after{content:'';position:absolute;inset:0;opacity:0;transition:opacity .2s}
+.kpi:hover::after,.kpi.active::after{opacity:1}
+.kpi:hover,.kpi.active{background:rgba(59,158,255,.06)}
+.kpi-n{font-size:24px;font-weight:900;line-height:1;letter-spacing:-1.5px;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+.kpi-l{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--t3);margin-top:3px;font-weight:500}
+.kpi-d{font-size:10px;font-weight:600;margin-top:2px}
+
+#tabs{height:var(--tab-h);background:var(--bg1);border-bottom:1px solid rgba(255,255,255,.04);display:flex;flex-shrink:0;overflow-x:auto;scrollbar-width:none;padding:0 8px}
+#tabs::-webkit-scrollbar{display:none}
+.tab{display:flex;align-items:center;gap:5px;padding:0 13px;height:100%;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;user-select:none}
+.tab:hover{color:var(--t2)}
+.tab.on{color:var(--cyan);border-color:var(--cyan)}
+.tab svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+
+.panel{flex:1;overflow:hidden;display:none;flex-direction:column;min-height:0;position:relative}
+.panel::after{
+  content:'';position:absolute;left:0;right:0;bottom:0;height:28px;
+  background:linear-gradient(180deg,transparent,var(--bg0) 85%);
+  pointer-events:none;opacity:1;transition:opacity .2s;z-index:5;
+}
+.panel.at-bottom::after{opacity:0}
+.panel.on{display:flex}
+
+.dash-scroll,.ana-scroll,.rain-scroll,.trend-scroll{flex:1;overflow-y:auto;padding:14px;padding-bottom:max(32px,calc(32px + env(safe-area-inset-bottom)));display:flex;flex-direction:column;gap:14px;min-height:0}
+.dash-scroll::-webkit-scrollbar,.ana-scroll::-webkit-scrollbar,.rain-scroll::-webkit-scrollbar,.trend-scroll::-webkit-scrollbar{width:3px}
+.dash-scroll::-webkit-scrollbar-thumb,.ana-scroll::-webkit-scrollbar-thumb,.rain-scroll::-webkit-scrollbar-thumb,.trend-scroll::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:2px}
+
+.section-head{font-size:10px;text-transform:uppercase;letter-spacing:.9px;color:var(--t2);font-weight:700;padding-bottom:9px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.section-head::before{content:'';width:3px;height:10px;background:linear-gradient(180deg,var(--cyan),var(--blue));border-radius:2px}
+
+.area-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.area-card{background:var(--bg2);border:1px solid rgba(255,255,255,.04);border-radius:var(--rl);padding:14px;transition:all .2s;cursor:pointer;position:relative;overflow:hidden}
+.area-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue-glow),transparent);opacity:0;transition:opacity .2s}
+.area-card:hover{border-color:rgba(59,158,255,.3);transform:translateY(-1px);box-shadow:0 4px 24px rgba(0,0,0,.3)}
+.area-card:hover::before{opacity:1}
+.area-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.area-card-name{font-size:13px;font-weight:700}
+.area-card-count{font-size:10px;color:var(--t3);background:var(--bg4);padding:2px 8px;border-radius:20px}
+.area-bar{display:flex;height:5px;border-radius:3px;overflow:hidden;gap:1px;margin-bottom:10px}
+.area-bar-seg{height:100%;transition:width .6s cubic-bezier(.34,1.56,.64,1)}
+.area-stat-row{display:flex;gap:6px}
+.area-stat{flex:1;background:var(--bg3);border-radius:7px;padding:7px 8px}
+.area-stat-n{font-size:15px;font-weight:800;line-height:1;font-family:'JetBrains Mono',monospace}
+.area-stat-l{font-size:8px;color:var(--t3);margin-top:2px;text-transform:uppercase;letter-spacing:.3px}
+
+.alert-list{display:flex;flex-direction:column;gap:6px}
+.alert-row{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid rgba(255,255,255,.04);border-radius:var(--r);padding:10px 13px;cursor:pointer;transition:all .2s}
+.alert-row:hover{background:var(--bg3);transform:translateX(2px)}
+.alert-row.critical{border-left:3px solid var(--red);background:rgba(255,79,79,.04)}
+.alert-row.warning{border-left:3px solid var(--amber);background:rgba(255,183,48,.04)}
+.alert-icon{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.alert-body{flex:1;min-width:0}
+.alert-name{font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.alert-meta{font-size:10px;color:var(--t3);margin-top:2px}
+.alert-elev{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;flex-shrink:0}
+
+.contractor-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.con-card{background:var(--bg2);border:1px solid rgba(255,255,255,.04);border-radius:var(--r);padding:12px;transition:all .2s}
+.con-card:hover{background:var(--bg3)}
+.con-name{font-size:12px;font-weight:700;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.con-row{display:flex;justify-content:space-between;font-size:11px;color:var(--t2);padding:2px 0}
+.con-val{font-weight:600;color:var(--t1);font-family:'JetBrains Mono',monospace}
+
+#map{flex:1}
+.map-fab{position:absolute;z-index:900;background:rgba(8,14,26,.9);border:1px solid rgba(255,255,255,.1);border-radius:var(--r);padding:7px 12px;font-size:11px;font-weight:600;color:var(--t1);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;white-space:nowrap;backdrop-filter:blur(8px)}
+.map-fab:hover{background:rgba(17,27,46,.95);border-color:rgba(59,158,255,.4)}
+.map-fab svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#mapFitBtn{top:10px;left:10px}
+#mapLayerBtn{top:10px;left:115px}
+#mapSearchBox{top:10px;left:220px}
+.map-search-input{background:rgba(8,14,26,.9);border:1px solid rgba(255,255,255,.1);color:var(--t1);padding:6px 10px;border-radius:var(--r);font-size:11px;width:160px;outline:none;backdrop-filter:blur(8px)}
+.map-search-input:focus{border-color:rgba(59,158,255,.5)}
+.map-search-input::placeholder{color:var(--t3)}
+.map-legend{position:absolute;bottom:28px;right:10px;z-index:900;background:rgba(4,8,15,.92);border:1px solid rgba(255,255,255,.08);border-radius:var(--r);padding:11px 13px;font-size:11px;backdrop-filter:blur(12px)}
+
+/* ── MARKER CLUSTER (dark theme override) ── */
+.aqua-cluster{display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:800;color:#fff;border-radius:50%;box-shadow:0 2px 12px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.85)}
+.aqua-cluster.c-low{background:radial-gradient(circle,#3B9EFF,#0A3D7A)}
+.aqua-cluster.c-mid{background:radial-gradient(circle,#FFB730,#B8790A)}
+.aqua-cluster.c-high{background:radial-gradient(circle,#FF4F4F,#8A0E0E)}
+.leaflet-marker-icon.marker-cluster{background:transparent!important}
+
+/* ── NOTIFICATION BELL ── */
+#notifBtn{background:var(--bg3);border:1px solid rgba(255,255,255,.08);color:var(--t2);width:30px;height:30px;border-radius:var(--r);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;position:relative}
+#notifBtn:hover{background:var(--bg4);color:var(--t1)}
+#notifBtn.on{color:var(--teal);border-color:rgba(0,229,200,.4);background:rgba(0,229,200,.08)}
+#notifBtn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#notifBtn .notif-dot{position:absolute;top:-2px;right:-2px;width:7px;height:7px;border-radius:50%;background:var(--red);display:none}
+#notifBtn.has-alert .notif-dot{display:block}
+
+/* ── COMPARE PIT MODE ── */
+.compare-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.compare-select{background:var(--bg3);border:1px solid rgba(255,255,255,.06);color:var(--t1);padding:6px 10px;border-radius:var(--r);font-size:11px;outline:none;cursor:pointer;min-width:150px;font-family:'Inter',sans-serif}
+.compare-vs{font-size:11px;color:var(--t3);font-weight:700}
+.compare-stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:12px}
+.compare-stat{background:var(--bg3);border-radius:var(--r);padding:9px 11px}
+.compare-stat-l{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px}
+.compare-stat-v{font-size:14px;font-weight:800;font-family:'JetBrains Mono',monospace;margin-top:3px}
+
+/* ── RISK / CORRELATION MINI LIST ── */
+.risk-item{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:var(--r);margin-bottom:6px}
+.risk-item .ri-badge{font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;flex-shrink:0}
+.leg-t{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--t3);margin-bottom:8px;font-weight:600}
+.leg-r{display:flex;align-items:center;gap:8px;padding:2px 0;color:var(--t2)}
+.leg-d{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+
+.tbl-bar{background:var(--bg1);border-bottom:1px solid rgba(255,255,255,.04);padding:8px 12px;display:flex;gap:7px;align-items:center;flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+.tbl-bar::-webkit-scrollbar{display:none}
+.srch{flex:1;min-width:130px;position:relative}
+.srch svg{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:13px;height:13px;fill:none;stroke:var(--t3);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.srch input{width:100%;background:var(--bg3);border:1px solid rgba(255,255,255,.06);color:var(--t1);padding:6px 8px 6px 27px;border-radius:var(--r);font-size:12px;outline:none;font-family:'Inter',sans-serif;transition:border .15s}
+.srch input:focus{border-color:rgba(59,158,255,.4)}
+.srch input::placeholder{color:var(--t3)}
+select{background:var(--bg3);border:1px solid rgba(255,255,255,.06);color:var(--t1);padding:6px 8px;border-radius:var(--r);font-size:11px;outline:none;cursor:pointer;max-width:130px;font-family:'Inter',sans-serif;transition:border .15s}
+select:focus{border-color:rgba(59,158,255,.4)}
+.rc{font-size:11px;color:var(--t3);white-space:nowrap;font-family:'JetBrains Mono',monospace}
+.export-btn{background:var(--bg3);border:1px solid rgba(255,255,255,.06);color:var(--t2);padding:6px 10px;border-radius:var(--r);font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;transition:all .15s}
+.export-btn:hover{background:var(--bg4);color:var(--t1)}
+.export-btn svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tbl-wrap{flex:1;overflow:auto;padding-bottom:env(safe-area-inset-bottom)}
+.tbl-wrap::-webkit-scrollbar{width:3px;height:3px}
+.tbl-wrap::-webkit-scrollbar-thumb{background:var(--bg5)}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:640px}
+thead th{background:var(--bg2);color:var(--t3);font-weight:600;text-align:left;padding:8px 12px;position:sticky;top:0;z-index:5;text-transform:uppercase;font-size:9px;letter-spacing:.6px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;user-select:none;white-space:nowrap;transition:color .15s}
+thead th:hover{color:var(--t2)}
+.si{opacity:.3;font-size:8px;margin-left:2px}
+th.asc .si::after{content:'▲';opacity:1}
+th.desc .si::after{content:'▼';opacity:1}
+tbody tr{border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer;transition:background .1s}
+tbody tr:hover{background:rgba(59,158,255,.06)}
+tbody tr.hl td:first-child{border-left:3px solid rgba(59,158,255,.6)}
+td{padding:8px 12px;color:var(--t2);vertical-align:middle}
+td.tn{font-weight:600;color:var(--t1)}
+td.te{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.b-dot{width:4px;height:4px;border-radius:50%;background:currentColor;flex-shrink:0}
+.bR{background:var(--red-glow);color:var(--red)}
+.bA{background:var(--amber-glow);color:var(--amber)}
+.bT{background:var(--teal-glow);color:var(--teal)}
+.bB{background:var(--blue-glow);color:var(--blue)}
+.bG{background:rgba(62,84,114,.3);color:var(--t3)}
+
+.trend-controls{background:var(--bg1);border-bottom:1px solid rgba(255,255,255,.04);padding:8px 12px;display:flex;gap:8px;align-items:center;flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+.trend-controls::-webkit-scrollbar{display:none}
+.trend-pit-select{background:var(--bg3);border:1px solid rgba(255,255,255,.06);color:var(--t1);padding:6px 10px;border-radius:var(--r);font-size:11px;outline:none;cursor:pointer;min-width:160px;font-family:'Inter',sans-serif}
+.trend-btn{background:var(--bg3);border:1px solid rgba(255,255,255,.06);color:var(--t2);padding:6px 12px;border-radius:var(--r);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s}
+.trend-btn:hover,.trend-btn.on{background:rgba(59,158,255,.15);border-color:rgba(59,158,255,.4);color:var(--cyan)}
+.trend-area-filter{background:var(--bg3);border:1px solid rgba(255,255,255,.06);color:var(--t1);padding:6px 10px;border-radius:var(--r);font-size:11px;outline:none;cursor:pointer;font-family:'Inter',sans-serif}
+
+.water-chart-container{background:var(--bg2);border:1px solid rgba(255,255,255,.04);border-radius:var(--rl);padding:16px;position:relative;overflow:hidden}
+.water-chart-container::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--cyan),var(--blue),var(--purple));opacity:.6}
+.chart-title{font-size:14px;font-weight:700;letter-spacing:-.2px;margin-bottom:4px;line-height:1.35}
+.chart-sub{font-size:10.5px;color:var(--t3);margin-bottom:14px;line-height:1.5}
+.trend-chart-wrap{position:relative;height:clamp(200px, 38vh, 320px)}
+.trend-mini-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:14px}
+.trend-mini{background:var(--bg3);border:1px solid rgba(255,255,255,.04);border-radius:var(--r);padding:11px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.trend-mini:hover{border-color:rgba(59,158,255,.3);transform:translateY(-1px)}
+.trend-mini-name{font-size:11px;font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trend-mini-elev{font-size:18px;font-weight:900;font-family:'JetBrains Mono',monospace;line-height:1}
+.trend-mini-delta{font-size:10px;font-weight:600;margin-top:2px}
+.trend-mini-spark{height:36px;margin-top:8px;position:relative}
+
+@keyframes waveMove{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.wave-container{position:absolute;bottom:0;left:0;right:0;overflow:hidden;pointer-events:none}
+.wave{animation:waveMove 3s linear infinite;white-space:nowrap}
+.wave svg{display:inline-block}
+
+.chart-card{background:var(--bg2);border:1px solid rgba(255,255,255,.05);border-radius:var(--rl);padding:16px;position:relative;isolation:isolate;box-shadow:0 4px 20px rgba(0,0,0,.18);transition:border-color .2s}
+.chart-card:hover{border-color:rgba(59,158,255,.14)}
+.chart-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(59,158,255,.35),transparent)}
+.chart-wrap{position:relative;height:clamp(160px, 32vh, 260px)}
+.chart-wrap.compact{height:clamp(130px, 24vh, 200px)}
+.chart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:3px}
+.chart-head-text{flex:1;min-width:0}
+.chart-maximize-btn{flex-shrink:0;width:28px;height:28px;border-radius:7px;background:var(--bg3);border:1px solid rgba(255,255,255,.06);color:var(--t2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.chart-maximize-btn:hover{background:var(--bg4);color:var(--text);border-color:rgba(59,158,255,.3)}
+.chart-maximize-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+.chart-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2500;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px}
+.chart-modal-bg.on{display:flex}
+.chart-modal{background:var(--bg2);border:1px solid rgba(255,255,255,.08);border-radius:14px;width:100%;max-width:1100px;height:min(86vh,720px);display:flex;flex-direction:column;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.chart-modal-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;flex-shrink:0}
+.chart-modal-title{font-size:15px;font-weight:700}
+.chart-modal-sub{font-size:11px;color:var(--t3);margin-top:2px}
+.chart-modal-close{width:30px;height:30px;border-radius:50%;background:var(--bg3);border:none;color:var(--t2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.chart-modal-close:hover{background:var(--bg4);color:var(--text)}
+.chart-modal-body{flex:1;position:relative;min-height:0}
+
+.gauge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+
+.week-pill-row{display:flex;gap:6px;overflow-x:auto;padding-top:10px;margin-top:4px;border-top:1px solid rgba(255,255,255,.06)}
+.week-pill{flex:0 0 auto;min-width:64px;background:var(--bg3);border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:7px 9px;text-align:center;cursor:pointer;transition:all .15s}
+.week-pill:hover{border-color:rgba(59,158,255,.35)}
+.week-pill.active{border-color:#3B9EFF;background:rgba(59,158,255,.1)}
+.wp-label{font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase}
+.wp-val{font-size:13px;font-weight:800;font-family:'JetBrains Mono',monospace;margin-top:2px}
+.wp-sub{font-size:8px;color:var(--t3);margin-top:1px}
+.gauge-card{background:var(--bg3);border:1px solid rgba(255,255,255,.04);border-radius:var(--r);padding:10px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;transition:all .2s}
+.gauge-card:hover{border-color:rgba(59,158,255,.3);transform:translateY(-1px)}
+.gauge-name{font-size:10px;font-weight:600;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%}
+.gauge-num{font-size:12px;font-weight:800;font-family:'JetBrains Mono',monospace;text-align:center}
+.gauge-area{font-size:9px;color:var(--t3);text-align:center}
+
+.forecast-station{margin-bottom:10px}
+.forecast-station-name{font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px}
+.forecast-days{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.forecast-day{flex:0 0 auto;min-width:54px;background:var(--bg3);border:1px solid rgba(255,255,255,.04);border-radius:8px;padding:8px 6px;text-align:center}
+.fd-date{font-size:9px;color:var(--t3);text-transform:capitalize}
+.fd-icon{font-size:18px;margin:3px 0}
+.fd-precip{font-size:11px;font-weight:700;color:var(--purple)}
+.fd-prob{font-size:9px;color:var(--t3)}
+.rain-extra-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+.rain-chip{font-size:9px;background:var(--bg4);border-radius:10px;padding:2px 7px;color:var(--t2);white-space:nowrap}
+.rain-tomorrow{font-size:10px;color:var(--t3);margin-top:4px}
+
+.rain-header{background:var(--bg2);border:1px solid rgba(255,255,255,.05);border-radius:var(--rl);padding:16px;position:relative;box-shadow:0 4px 20px rgba(0,0,0,.18)}
+.rain-header-title{font-size:14px;font-weight:700;line-height:1.4;letter-spacing:-.1px}
+.rain-header-sub{font-size:10.5px;color:var(--t3);margin-top:3px;line-height:1.5}
+.rain-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:8px;margin-top:12px}
+.rain-kpi{background:var(--bg3);border:1px solid rgba(255,255,255,.03);border-radius:var(--r);padding:10px 11px;transition:border-color .15s}
+.rain-kpi:hover{border-color:rgba(167,139,250,.25)}
+.rain-kpi-n{font-size:19px;font-weight:900;letter-spacing:-.5px;line-height:1.15;color:var(--purple);font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.rain-kpi-l{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);margin-top:4px;line-height:1.3}
+.rain-station-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.rain-station{background:var(--bg2);border:1px solid rgba(255,255,255,.04);border-radius:var(--r);padding:12px;display:flex;gap:10px;align-items:center;transition:all .2s}
+.rain-station:hover{background:var(--bg3)}
+.rain-icon{width:38px;height:38px;border-radius:50%;background:rgba(167,139,250,.1);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.rain-body{flex:1;min-width:0}
+.rain-loc{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rain-val{font-size:20px;font-weight:900;font-family:'JetBrains Mono',monospace;color:var(--purple);line-height:1;margin-top:2px}
+.rain-meta{font-size:10px;color:var(--t3);margin-top:2px}
+.rain-intensity{font-size:9px;font-weight:700;padding:3px 8px;border-radius:20px}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2000;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px)}
+.modal-bg.on{display:flex}
+@media(min-height:500px){.modal-bg{align-items:center}}
+.modal{background:var(--bg2);border:1px solid rgba(255,255,255,.08);border-radius:16px 16px 0 0;width:100%;max-width:500px;max-height:90dvh;overflow-y:auto;box-shadow:0 -8px 48px rgba(0,0,0,.7)}
+.modal::-webkit-scrollbar{width:3px}
+.modal::-webkit-scrollbar-thumb{background:var(--bg5)}
+@media(min-height:500px){.modal{border-radius:16px;margin:16px}}
+.modal-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding:16px 16px 12px;position:sticky;top:0;background:var(--bg2);z-index:1;border-bottom:1px solid rgba(255,255,255,.04)}
+.modal-title{font-size:15px;font-weight:800;line-height:1.3}
+.modal-x{width:28px;height:28px;border-radius:50%;background:var(--bg3);border:none;color:var(--t2);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.modal-x:hover{background:var(--bg4);color:var(--t1)}
+
+.modal-water-block{padding:14px 16px 8px;position:relative;overflow:hidden;background:linear-gradient(180deg,rgba(0,212,255,.03),rgba(59,158,255,.06));border-radius:0}
+.modal-elev-num{font-size:42px;font-weight:900;letter-spacing:-2px;font-family:'JetBrains Mono',monospace;line-height:1;position:relative;z-index:1}
+.modal-elev-lbl{font-size:11px;color:var(--t3);margin-top:3px;position:relative;z-index:1}
+.modal-water-visual{height:80px;position:relative;margin:10px 0;border-radius:var(--r);overflow:hidden;background:var(--bg3)}
+.water-fill{position:absolute;bottom:0;left:0;right:0;transition:height 1.2s cubic-bezier(.34,1.56,.64,1);border-radius:0 0 var(--r) var(--r)}
+.water-waves{position:absolute;top:-4px;left:0;right:0;height:12px;overflow:hidden}
+.water-waves svg{animation:waveMove 2s linear infinite}
+.water-label{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700;color:rgba(255,255,255,.9);z-index:2;font-family:'JetBrains Mono',monospace}
+.water-pct-label{position:absolute;left:10px;bottom:8px;font-size:10px;color:rgba(255,255,255,.7);z-index:2}
+
+.modal-trend{padding:0 16px 12px}
+.modal-trend-title{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--t3);font-weight:600;margin-bottom:8px}
+.modal-trend-chart{height:100px;position:relative}
+
+.modal-gauge-wrap{padding:4px 16px 10px}
+.modal-gauge-bar{height:10px;background:var(--bg4);border-radius:6px;overflow:hidden;margin-bottom:4px;position:relative}
+.modal-gauge-fill{height:100%;border-radius:6px;transition:width .8s cubic-bezier(.34,1.56,.64,1)}
+.modal-gauge-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--t3);font-family:'JetBrains Mono',monospace}
+.modal-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:4px 16px 14px}
+.mf{background:var(--bg3);border-radius:var(--r);padding:10px 11px;transition:background .15s}
+.mf.full{grid-column:1/-1}
+.mf-l{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);font-weight:600}
+.mf-v{font-size:12.5px;font-weight:600;color:var(--t1);margin-top:4px;line-height:1.4}
+.modal-acts{display:flex;gap:8px;padding:0 16px 16px;flex-wrap:wrap}
+.mact{flex:1;min-width:100px;padding:9px;border-radius:var(--r);border:1px solid rgba(255,255,255,.08);background:transparent;color:var(--t1);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:all .15s}
+.mact:hover{background:var(--bg3)}
+.mact svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.mact.primary{background:linear-gradient(135deg,var(--blue),var(--cyan));border-color:transparent;color:#fff}
+.mact.primary:hover{transform:translateY(-1px);box-shadow:0 4px 16px var(--blue-glow)}
+.mact.warn{background:rgba(255,79,79,.15);border-color:rgba(255,79,79,.3);color:var(--red)}
+
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid rgba(255,255,255,.08);border-radius:var(--r);padding:9px 16px;font-size:12px;font-weight:600;z-index:3000;display:flex;align-items:center;gap:8px;box-shadow:var(--shadow);opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap}
+.toast{transform:translateX(-50%) translateY(8px)}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.ok{border-color:rgba(0,229,200,.4);color:var(--teal)}
+.toast.err{border-color:rgba(255,79,79,.4);color:var(--red)}
+.toast.warn{border-color:rgba(255,183,48,.4);color:var(--amber)}
+
+.leaflet-popup-content-wrapper{background:rgba(8,14,26,.95);color:var(--t1);border:1px solid rgba(59,158,255,.2);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.6);backdrop-filter:blur(12px)}
+.leaflet-popup-tip{background:rgba(8,14,26,.95)}
+.leaflet-popup-content{margin:12px 14px;font-size:12px;min-width:170px}
+.lp-n{font-weight:700;font-size:13px;margin-bottom:5px}
+.lp-e{font-size:22px;font-weight:900;font-family:'JetBrains Mono',monospace}
+.lp-d{font-size:10px;color:var(--t3);margin-top:2px}
+.lp-b{margin-top:7px;display:flex;gap:5px;align-items:center}
+.lp-delta{font-size:10px;font-weight:700}
+.leaflet-control-zoom a{background:rgba(8,14,26,.9)!important;color:var(--t1)!important;border-color:rgba(255,255,255,.1)!important}
+.leaflet-control-zoom a:hover{background:rgba(17,27,46,.95)!important}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:2px}
+
+.spark-canvas{width:100%;height:36px}
+
+@media(max-width:480px){
+  #tabs{height:54px}
+  .tab{flex-direction:column;gap:2px;padding:6px 10px 4px;justify-content:center}
+  .tab span{display:block;font-size:9px;line-height:1}
+}
+
+@media(max-width:400px){
+  .brand-sub{display:none}
+  .hdr-status{display:none}
+  .kpi-n{font-size:18px}
+  .kpi{min-width:78px;padding:0 6px}
+}
+
+@media(max-width:480px){
+  .area-grid,.contractor-grid,.trend-mini-grid,.gauge-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  .modal-fields{grid-template-columns:1fr 1fr}
+}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.area-card,.alert-row,.con-card{animation:fadeUp .35s ease both}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loadScreen">
+  <div class="load-water">
+    <div class="load-drop"></div>
+    <div class="load-ring"></div>
+  </div>
+  <div class="load-logo">AQUA<span>MIN</span></div>
+  <div class="load-bar"><div class="load-fill"></div></div>
+  <div class="load-txt" id="loadTxt">Menghubungkan ke database...</div>
+</div>
+
+<!-- HEADER -->
+<div id="hdr">
+  <div class="brand">
+    <div class="brand-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2C6.5 2 3 7 3 12s3.5 10 9 10 9-5 9-10S17.5 2 12 2z"/>
+        <path d="M3 12c3 3 6 4 9 4s6-1 9-4"/>
+        <path d="M7 6.5c1.5 1 3 1.5 5 1.5s3.5-.5 5-1.5"/>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-name"><span class="aq">AQUA</span>MIN</div>
+      <div class="brand-sub">Arutmin Quick Water Monitoring</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <button id="notifBtn" onclick="toggleNotifications()" title="Aktifkan notifikasi overflow">
+      <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="notif-dot"></span>
+    </button>
+    <div class="live-pill">
+      <div class="live-dot"></div>
+      <span id="liveClock" style="font-family:'JetBrains Mono',monospace">--:--:--</span>
+    </div>
+    <div class="hdr-status" id="hdrStatus"></div>
+    <button id="syncBtn" onclick="loadData()">
+      <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.1"/></svg>
+      Sync
+    </button>
+  </div>
+</div>
+
+<!-- KPI RIBBON -->
+<div id="ribbon">
+  <div class="kpi" onclick="filterByStatus('')" id="kpi-all">
+    <div class="kpi-n" id="kn-all" style="color:var(--cyan)">—</div>
+    <div class="kpi-l">Total Pit</div>
+  </div>
+  <div class="kpi" onclick="filterByStatus('overflow')" id="kpi-overflow">
+    <div class="kpi-n" id="kn-overflow" style="color:var(--red)">—</div>
+    <div class="kpi-l">Overflow</div>
+    <div class="kpi-d" id="kd-overflow" style="color:var(--red)"></div>
+  </div>
+  <div class="kpi" onclick="filterByStatus('lumpur')" id="kpi-lumpur">
+    <div class="kpi-n" id="kn-lumpur" style="color:var(--amber)">—</div>
+    <div class="kpi-l">Lumpur</div>
+  </div>
+  <div class="kpi" onclick="filterByStatus('missing')" id="kpi-missing">
+    <div class="kpi-n" id="kn-missing" style="color:var(--t3)">—</div>
+    <div class="kpi-l">Missing</div>
+  </div>
+  <div class="kpi" id="kpi-minelev">
+    <div class="kpi-n" id="kn-minelev" style="color:var(--red);font-size:17px">—</div>
+    <div class="kpi-l">Elevasi Min</div>
+    <div class="kpi-d" id="kd-minelev" style="color:var(--t3)"></div>
+  </div>
+  <div class="kpi" id="kpi-maxelev">
+    <div class="kpi-n" id="kn-maxelev" style="color:var(--teal);font-size:17px">—</div>
+    <div class="kpi-l">Elevasi Max</div>
+    <div class="kpi-d" id="kd-maxelev" style="color:var(--t3)"></div>
+  </div>
+  <div class="kpi" id="kpi-rain">
+    <div class="kpi-n" id="kn-rain" style="color:var(--purple);font-size:17px">—</div>
+    <div class="kpi-l">Curah Hujan</div>
+    <div class="kpi-d" id="kd-rain" style="color:var(--t3)">Live</div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div id="tabs">
+  <div class="tab on" onclick="goTab('dashboard')">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+    <span>Dashboard</span>
+  </div>
+  <div class="tab" onclick="goTab('trend')">
+    <svg viewBox="0 0 24 24"><path d="M22 12s-4-8-10-8S2 12 2 12s4 8 10 8 10-8 10-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    <span>Tren Air</span>
+  </div>
+  <div class="tab" onclick="goTab('map')">
+    <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+    <span>Peta</span>
+  </div>
+  <div class="tab" onclick="goTab('table')">
+    <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    <span>Tabel</span>
+  </div>
+  <div class="tab" onclick="goTab('analysis')">
+    <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    <span>Analisis</span>
+  </div>
+  <div class="tab" onclick="goTab('rainfall')">
+    <svg viewBox="0 0 24 24"><line x1="8" y1="19" x2="8" y2="21"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="16" y1="19" x2="16" y2="21"/><line x1="16" y1="13" x2="16" y2="15"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="12" y1="15" x2="12" y2="17"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>
+    <span>Curah Hujan</span>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="panel on" id="panel-dashboard">
+  <div class="dash-scroll">
+    <div class="chart-card" id="insightCard" style="display:none">
+      <div class="section-head">🧠 Ringkasan Eksekutif (Otomatis)</div>
+      <div id="insightBody" style="font-size:12px;color:var(--t2);line-height:1.7"></div>
+    </div>
+    <div>
+      <div class="section-head">Ringkasan per Area</div>
+      <div class="area-grid" id="areaGrid"></div>
+    </div>
+    <div>
+      <div class="section-head">⚠ Pit Memerlukan Perhatian Segera</div>
+      <div class="alert-list" id="alertList"></div>
+    </div>
+    <div>
+      <div class="section-head">Ringkasan per Kontraktor</div>
+      <div class="contractor-grid" id="contractorGrid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TREND PANEL -->
+<div class="panel" id="panel-trend">
+  <div class="trend-controls">
+    <select class="trend-area-filter" id="trendAreaFilter" onchange="buildTrendPanel()">
+      <option value="">Semua Area</option>
+    </select>
+    <select id="trendPitSelect" class="trend-pit-select" onchange="updateMainTrendChart()">
+      <option value="">— Pilih Pit untuk Detail —</option>
+    </select>
+    <button class="trend-btn on" id="trendBtnAll" onclick="setTrendView('all')">Semua Pit</button>
+    <button class="trend-btn" id="trendBtnOverflow" onclick="setTrendView('overflow')">Overflow Only</button>
+    <button class="trend-btn" id="trendBtnRising" onclick="setTrendView('rising')">Naik ▲</button>
+    <button class="trend-btn" id="trendBtnFalling" onclick="setTrendView('falling')">Turun ▼</button>
+  </div>
+  <div class="trend-scroll">
+    <div class="water-chart-container">
+      <div class="chart-head">
+        <div class="chart-head-text">
+          <div class="chart-title">📈 Tren Level Air — Riwayat Pengukuran</div>
+          <div class="chart-sub" id="trendChartSub">Grafik elevasi level air seluruh pit berdasarkan data periode pengukuran. Klik pit di bawah untuk fokus.</div>
+        </div>
+        <button class="chart-maximize-btn" onclick="maximizeChart('trendMain')" title="Perbesar grafik">
+          <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+      </div>
+      <div class="trend-chart-wrap"><canvas id="chartTrendMain"></canvas></div>
+    </div>
+    <div>
+      <div class="section-head">Mini Tren per Pit <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-size:10px;margin-left:4px" id="trendCount"></span></div>
+      <div class="trend-mini-grid" id="trendMiniGrid"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">⚖ Bandingkan 2 Pit</div>
+      <div class="chart-sub">Pilih dua pit untuk melihat perbandingan tren elevasi secara berdampingan, termasuk selisih dan proyeksi.</div>
+      <div class="compare-bar">
+        <select class="compare-select" id="comparePitA" onchange="buildCompareChart()"><option value="">— Pit A —</option></select>
+        <span class="compare-vs">VS</span>
+        <select class="compare-select" id="comparePitB" onchange="buildCompareChart()"><option value="">— Pit B —</option></select>
+      </div>
+      <div id="compareEmpty" style="font-size:11px;color:var(--t3);padding:20px 0;text-align:center">Pilih Pit A dan Pit B untuk membandingkan.</div>
+      <div id="compareContent" style="display:none">
+        <div class="chart-wrap" style="margin-top:10px"><canvas id="chartCompare"></canvas></div>
+        <div class="compare-stat-row" id="compareStatRow"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MAP -->
+<div class="panel" id="panel-map" style="position:relative">
+  <div id="map"></div>
+  <button class="map-fab" id="mapFitBtn" onclick="fitMap()">
+    <svg viewBox="0 0 24 24"><path d="M3 3h6m-6 0v6M21 3h-6m6 0v6M3 21h6m-6 0v-6M21 21h-6m6 0v-6"/></svg>
+    Fit Semua
+  </button>
+  <button class="map-fab" id="mapLayerBtn" onclick="toggleLayer()" style="left:110px">
+    <svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+    Satelit
+  </button>
+  <div id="mapSearchBox" class="map-fab" style="left:220px;padding:0">
+    <input class="map-search-input" id="mapSearchIn" placeholder="🔍 Cari pit di peta..." oninput="searchMapPit(this.value)">
+  </div>
+  <div class="map-legend">
+    <div class="leg-t">Status Pit</div>
+    <div class="leg-r"><div class="leg-d" style="background:var(--red)"></div>Overflow</div>
+    <div class="leg-r"><div class="leg-d" style="background:var(--amber)"></div>Lumpur</div>
+    <div class="leg-r"><div class="leg-d" style="background:var(--teal)"></div>Normal</div>
+    <div class="leg-r"><div class="leg-d" style="background:var(--blue)"></div>Updated</div>
+    <div class="leg-r"><div class="leg-d" style="background:var(--t3)"></div>Missing</div>
+  </div>
+</div>
+
+<!-- TABLE -->
+<div class="panel" id="panel-table">
+  <div class="tbl-bar">
+    <div class="srch">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="srchIn" placeholder="Cari pit, area, kontraktor..." oninput="applyFilter()">
+    </div>
+    <select id="fArea" onchange="applyFilter()"><option value="">Semua Area</option></select>
+    <select id="fStatus" onchange="applyFilter()">
+      <option value="">Semua Status</option>
+      <option value="overflow">Overflow</option>
+      <option value="lumpur">Lumpur</option>
+      <option value="normal">Normal</option>
+      <option value="missing">Missing</option>
+    </select>
+    <select id="fContractor" onchange="applyFilter()"><option value="">Semua Kontraktor</option></select>
+    <button class="export-btn" onclick="exportCSV()">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      CSV
+    </button>
+    <button class="export-btn" onclick="copySystemSummary()" title="Salin ringkasan sistem untuk laporan cepat">
+      <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      Ringkasan
+    </button>
+    <button class="export-btn" onclick="exportPDF()" title="Unduh laporan PDF">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      PDF
+    </button>
+    <span class="rc" id="rcCount"></span>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th onclick="sortTbl('Pit')" id="th-Pit">Nama Pit<span class="si"></span></th>
+        <th onclick="sortTbl('Area')" id="th-Area">Area<span class="si"></span></th>
+        <th onclick="sortTbl('Kontraktor')" id="th-Kontraktor">Kontraktor<span class="si"></span></th>
+        <th onclick="sortTbl('Elevation')" id="th-Elevation">Elevasi (m)<span class="si"></span></th>
+        <th onclick="sortTbl('Delta')" id="th-Delta">Δ Delta<span class="si"></span></th>
+        <th onclick="sortTbl('Kondisi')" id="th-Kondisi">Kondisi<span class="si"></span></th>
+        <th onclick="sortTbl('Status')" id="th-Status">Status<span class="si"></span></th>
+        <th onclick="sortTbl('Tanggal Update Terakhir')" id="th-Tanggal Update Terakhir">Tgl Update<span class="si"></span></th>
+      </tr></thead>
+      <tbody id="tblBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ANALYSIS -->
+<div class="panel" id="panel-analysis">
+  <div class="ana-scroll">
+    <div class="chart-card">
+      <div class="chart-head">
+        <div class="chart-head-text">
+          <div class="chart-title">📅 Analisis per Minggu (<span id="weekRangeLabel">—</span>)</div>
+          <div class="chart-sub">Rata-rata elevasi dan jumlah pit overflow tiap periode pengambilan data</div>
+        </div>
+        <button class="chart-maximize-btn" onclick="maximizeChart('weekly')" title="Perbesar grafik">
+          <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+      </div>
+      <div class="chart-wrap"><canvas id="chartWeekly"></canvas></div>
+      <div class="week-pill-row" id="weekPillRow"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div class="chart-head-text">
+          <div class="chart-title">Distribusi Status Pit per Area</div>
+          <div class="chart-sub">Perbandingan kondisi tiap area operasional</div>
+        </div>
+        <button class="chart-maximize-btn" onclick="maximizeChart('areaStatus')" title="Perbesar grafik">
+          <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+      </div>
+      <div class="chart-wrap"><canvas id="chartAreaStatus"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div class="chart-head-text">
+          <div class="chart-title">Sebaran Elevasi Level Air</div>
+          <div class="chart-sub">Distribusi elevasi seluruh pit (mdpl)</div>
+        </div>
+        <button class="chart-maximize-btn" onclick="maximizeChart('elevDist')" title="Perbesar grafik">
+          <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+      </div>
+      <div class="chart-wrap"><canvas id="chartElevDist"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div class="chart-head-text">
+          <div class="chart-title">Perbandingan Elevasi per Kontraktor</div>
+          <div class="chart-sub">Rata-rata elevasi level air per kontraktor</div>
+        </div>
+        <button class="chart-maximize-btn" onclick="maximizeChart('contractor')" title="Perbesar grafik">
+          <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+      </div>
+      <div class="chart-wrap compact"><canvas id="chartContractor"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Water Level Gauge — Semua Pit</div>
+      <div class="chart-sub">Visual risiko relatif tiap pit. Merah = kritis, hijau = aman. Klik untuk detail.</div>
+      <div class="gauge-grid" id="gaugeGrid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RAINFALL -->
+<div class="panel" id="panel-rainfall">
+  <div class="rain-scroll">
+    <div class="rain-header">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="rain-header-title">☁️ Curah Hujan Real-time &amp; Prakiraan</div>
+          <div class="rain-header-sub">Sumber: Open-Meteo API · Area tambang Kalimantan Selatan · 7 hari terakhir + 7 hari prakiraan</div>
+        </div>
+        <div style="font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace" id="rainUpdated"></div>
+      </div>
+      <div class="rain-kpi-row" id="rainKpiRow"></div>
+    </div>
+    <div class="chart-card" id="rainInsightCard" style="display:none">
+      <div class="chart-title">🎯 Indeks Risiko &amp; Insight Curah Hujan</div>
+      <div class="chart-sub">Analisis otomatis tren hujan, potensi risiko overflow, dan rekomendasi</div>
+      <div id="rainInsightBody" style="font-size:12px;color:var(--t2);line-height:1.7;margin-top:8px"></div>
+    </div>
+    <div class="chart-card" id="correlationCard" style="display:none">
+      <div class="chart-title">🔗 Korelasi Hujan → Pit Terdekat</div>
+      <div class="chart-sub">Pit dicocokkan otomatis ke stasiun hujan terdekat berdasarkan jarak. Pit dengan tren naik + prakiraan hujan tinggi di stasiun terdekatnya ditandai berisiko.</div>
+      <div id="correlationBody" style="margin-top:8px"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div class="chart-head-text">
+          <div class="chart-title">Curah Hujan — Histori &amp; Prakiraan</div>
+          <div class="chart-sub">Garis solid = tercatat, garis putus-putus = prakiraan. Garis biru menandai hari ini.</div>
+        </div>
+        <button class="chart-maximize-btn" onclick="maximizeChart('rain')" title="Perbesar grafik">
+          <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+      </div>
+      <div class="chart-wrap"><canvas id="chartRain"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">📅 Prakiraan 7 Hari ke Depan</div>
+      <div class="chart-sub">Kondisi cuaca dan estimasi curah hujan harian per stasiun</div>
+      <div id="rainForecastStrip"></div>
+    </div>
+    <div>
+      <div class="section-head">Detail per Stasiun — Hari Ini</div>
+      <div class="rain-station-grid" id="rainStations"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-bg" id="detailModal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title" id="mTitle"></div>
+      <button class="modal-x" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-water-block">
+      <div class="modal-elev-num" id="mElev"></div>
+      <div class="modal-elev-lbl">Meter di Atas Permukaan Laut (mdpl)</div>
+      <div class="modal-water-visual" id="mWaterVis">
+        <div class="water-fill" id="mWaterFill"></div>
+        <div class="water-waves" id="mWaterWaves"></div>
+        <div class="water-label" id="mWaterLabel"></div>
+        <div class="water-pct-label" id="mWaterPct"></div>
+      </div>
+    </div>
+    <div class="modal-trend">
+      <div class="modal-trend-title">📈 Tren Level Air (Data Mingguan)</div>
+      <div class="modal-trend-chart"><canvas id="mTrendChart"></canvas></div>
+    </div>
+    <div class="modal-gauge-wrap">
+      <div class="modal-gauge-bar"><div class="modal-gauge-fill" id="mGaugeFill"></div></div>
+      <div class="modal-gauge-labels"><span id="mGaugeMin"></span><span id="mGaugeLbl"></span><span id="mGaugeMax"></span></div>
+    </div>
+    <div class="modal-fields" id="mFields"></div>
+    <div class="modal-acts" id="mActs"></div>
+  </div>
+</div>
+
+<!-- CHART MAXIMIZE MODAL -->
+<div class="chart-modal-bg" id="chartModal">
+  <div class="chart-modal">
+    <div class="chart-modal-hdr">
+      <div>
+        <div class="chart-modal-title" id="chartModalTitle"></div>
+        <div class="chart-modal-sub" id="chartModalSub"></div>
+      </div>
+      <button class="chart-modal-close" onclick="closeChartModal()">✕</button>
+    </div>
+    <div class="chart-modal-body"><canvas id="chartModalCanvas"></canvas></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// CHART.JS PLUGIN SETUP
+// ─────────────────────────────────────────────────────────────
+if(window.ChartDataLabels){
+  Chart.register(ChartDataLabels);
+  Chart.defaults.set('plugins.datalabels', {display:false});
+}
+Chart.defaults.font.family = "'Inter',sans-serif";
+
+// ─────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────
+const SHEET_PUBHTML = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-Ih-WeHBl1DexyfATFfNDXEnfgwgeSnZh0AQ_BBUOTDkwx_1XrZiLzdFt2ErEDAwHkgcMjRgS1O5t/pub?output=csv';
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
+
+const KNOWN_COLS = new Set([
+  'no','easting','northing','delta elevasi (m)','area','pit','kondisi',
+  'volume (m3)','tanggal update terakhir','status','jumlah pompa aktif',
+  'curah hujan (mm)','target elevasi (m)','kondisi pompa','catatan','link foto',
+  'kontraktor','keterangan','elevation','elevasi'
+]);
+let WEEK_COLS = [];
+
+function detectWeekColumns(rows){
+  if(!rows.length) return [];
+  const headers = Object.keys(rows[0]);
+  const candidates = headers.filter(h=>{
+    const key = h.toLowerCase().trim();
+    if(KNOWN_COLS.has(key)) return false;
+    if(key==='') return false;
+    const looksLikeDate = !isNaN(new Date(h)) && /\d{4}/.test(h);
+    if(looksLikeDate) return true;
+    let numericCount=0, filledCount=0;
+    for(const row of rows){
+      const v = row[h];
+      if(v===undefined||v===null||v==='') continue;
+      filledCount++;
+      if(parseFlexNum(v)!==null) numericCount++;
+    }
+    return filledCount>0 && (numericCount/filledCount)>=0.6;
+  });
+  const asDates = candidates.map(h=>({h,d:new Date(h)}));
+  const allValidDates = asDates.every(x=>!isNaN(x.d));
+  if(allValidDates && candidates.length>1){
+    asDates.sort((a,b)=>a.d-b.d);
+    return asDates.map(x=>x.h);
+  }
+  return candidates;
+}
+
+function isoWeekNumber(date){
+  const d = new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
+  d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7)+3);
+  const thu = new Date(Date.UTC(d.getUTCFullYear(),0,4));
+  return 1+Math.round(((d-thu)/86400000-3+((thu.getUTCDay()+6)%7))/7);
+}
+
+let WEEK_COL_OVERRIDE = {};
+let WEEK_LABEL_IS_ESTIMATED = false;
+
+function buildWeekLabelOverrides(weekCols, rows){
+  WEEK_COL_OVERRIDE = {};
+  WEEK_LABEL_IS_ESTIMATED = false;
+  if(!weekCols.length) return;
+  const first = (weekCols[0]||'').toLowerCase().trim();
+  const firstIsMerged = first==='elevasi'||first==='elevation';
+  const tail = weekCols.slice(firstIsMerged?1:0);
+  const looksRecovered = tail.length>0 &&
+    tail.every(h=>h===''||/^_\d+$/.test(h)) &&
+    (firstIsMerged || weekCols.every(h=>h===''||/^_\d+$/.test(h)));
+  if(!looksRecovered) return;
+  let latestDate = null;
+  (rows||[]).forEach(row=>{
+    const raw=row['Tanggal Update Terakhir']||row['Tanggal Update']||'';
+    if(!raw) return;
+    const dt=new Date(raw);
+    if(!isNaN(dt)&&(!latestDate||dt>latestDate)) latestDate=dt;
+  });
+  const anchor = isoWeekNumber(latestDate||new Date());
+  weekCols.forEach((h,i)=>{
+    WEEK_COL_OVERRIDE[h] = 'W'+(anchor-(weekCols.length-1-i));
+  });
+  WEEK_LABEL_IS_ESTIMATED = true;
+}
+
+function weekLabel(h){
+  if(WEEK_COL_OVERRIDE[h]) return WEEK_COL_OVERRIDE[h];
+  const d=new Date(h);
+  if(!isNaN(d)&&/\d{4}/.test(String(h))){
+    return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});
+  }
+  return String(h);
+}
+function getWeekLabels(){ return WEEK_COLS.map(weekLabel); }
+
+const RAIN_STATIONS = [
+  {name:'Satui',lat:-3.83,lng:115.47},
+  {name:'Mulia / Jombang',lat:-3.73,lng:115.62},
+  {name:'Bima',lat:-3.65,lng:115.80},
+  {name:'Abimanyu / Gatotkaca',lat:-3.65,lng:115.57},
+  {name:'Yudistira',lat:-3.74,lng:115.18},
+];
+
+// ─────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────
+let DATA = [];
+let FILTERED = [];
+let sortKey = 'Pit', sortDir = 1;
+let activeTab = 'dashboard';
+let charts = {};
+let sparkCharts = {};
+let mapMarkers = [];
+let useSat = false;
+let rainData = {};
+let trendView = 'all';
+let mTrendChart = null;
+let hasAutoFitOnce = false;
+let previousOverflowIds = null; // null until first baseline is recorded
+let notificationsEnabled = false;
+try{ notificationsEnabled = (localStorage.getItem('aquamin_notif')==='1'); }catch(e){}
+let clusterGroup = null;
+
+proj4.defs('EPSG:32750','+proj=utm +zone=50 +south +datum=WGS84 +units=m +no_defs');
+
+function parseFlexNum(raw){
+  if(raw===null||raw===undefined) return null;
+  let s=String(raw).trim();
+  if(s===''||s==='-'||s.toLowerCase()==='nan') return null;
+  s=s.replace(/\s/g,'');
+  const negative = s.startsWith('-');
+  if(negative) s=s.slice(1);
+  const dotCount=(s.match(/\./g)||[]).length;
+  const commaCount=(s.match(/,/g)||[]).length;
+  if(commaCount>0 && dotCount<=1){
+    s=s.replace(/,/g,'');
+  }else if(commaCount===1 && dotCount===0){
+    const parts=s.split(',');
+    s = parts[1].length<=3 ? parts.join('.') : parts.join('');
+  }else if(dotCount>1){
+    const parts=s.split('.');
+    s=parts.slice(0,-1).join('')+'.'+parts[parts.length-1];
+  }
+  const n=parseFloat(s);
+  if(isNaN(n)) return null;
+  return negative?-n:n;
+}
+function parseVolume(raw){
+  return parseFlexNum(raw);
+}
+
+function toLL(e,n){
+  try{
+    const pe=parseFlexNum(e), pn=parseFlexNum(n);
+    if(pe===null||pn===null) return null;
+    const[lng,lat]=proj4('EPSG:32750','WGS84',[pe,pn]);
+    if(lat>-12&&lat<5&&lng>105&&lng<120)return[lat,lng];
+  }catch(x){}
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// RAINFALL ↔ PIT CORRELATION (nearest-station matching)
+// ─────────────────────────────────────────────────────────────
+// Haversine great-circle distance in km — used to match each pit to its
+// physically closest rainfall station so we can reason about "this pit is
+// near Satui, and Satui has heavy rain forecast" without needing a manual
+// mapping table that would go stale as new pits are added.
+function haversineKm(lat1,lng1,lat2,lng2){
+  const R=6371;
+  const dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function findNearestStation(ll){
+  if(!ll) return null;
+  let best=null,bestDist=Infinity;
+  RAIN_STATIONS.forEach(st=>{
+    const dist = haversineKm(ll[0],ll[1],st.lat,st.lng);
+    if(dist<bestDist){bestDist=dist;best=st;}
+  });
+  return best ? {name:best.name, distKm:bestDist} : null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// SIMPLE LINEAR PROJECTION (elevation trend forecasting)
+// ─────────────────────────────────────────────────────────────
+// Ordinary least-squares regression over (period index -> elevation) using
+// only the periods that actually have data, then extrapolates `stepsAhead`
+// more periods. This is intentionally simple/transparent (no external ML
+// library) — good enough to flag "at this rate, this pit reaches X in N
+// weeks" without pretending to be a rigorous hydrological model.
+function linearRegression(points){
+  const n = points.length;
+  if(n<2) return null;
+  const sumX=points.reduce((a,p)=>a+p[0],0);
+  const sumY=points.reduce((a,p)=>a+p[1],0);
+  const sumXY=points.reduce((a,p)=>a+p[0]*p[1],0);
+  const sumXX=points.reduce((a,p)=>a+p[0]*p[0],0);
+  const denom=(n*sumXX-sumX*sumX);
+  if(denom===0) return null;
+  const slope=(n*sumXY-sumX*sumY)/denom;
+  const intercept=(sumY-slope*sumX)/n;
+  return {slope,intercept};
+}
+function projectElevation(weekly, stepsAhead){
+  const points = weekly.map((v,i)=>[i,v]).filter(p=>p[1]!==null);
+  if(points.length<3) return null; // require at least 3 real points to trust a trend
+  const reg = linearRegression(points);
+  if(!reg) return null;
+  const lastIdx = weekly.length-1;
+  const projected = [];
+  for(let k=1;k<=stepsAhead;k++){
+    projected.push(reg.slope*(lastIdx+k)+reg.intercept);
+  }
+  return {slope:reg.slope, values:projected};
+}
+// Pearson correlation coefficient between two equal-length numeric series
+// (nulls paired-excluded) — used by the pit comparison feature to quantify
+// how similarly two pits' water levels move together.
+function pearsonCorrelation(a,b){
+  const pairs=[];
+  for(let i=0;i<Math.min(a.length,b.length);i++){
+    if(a[i]!==null&&b[i]!==null) pairs.push([a[i],b[i]]);
+  }
+  if(pairs.length<2) return null;
+  const n=pairs.length;
+  const meanA=pairs.reduce((s,p)=>s+p[0],0)/n;
+  const meanB=pairs.reduce((s,p)=>s+p[1],0)/n;
+  let num=0,denA=0,denB=0;
+  pairs.forEach(([x,y])=>{ num+=(x-meanA)*(y-meanB); denA+=(x-meanA)**2; denB+=(y-meanB)**2; });
+  if(denA===0||denB===0) return null;
+  return num/Math.sqrt(denA*denB);
+}
+
+// ─────────────────────────────────────────────────────────────
+// VIEWPORT HEIGHT FIX (mobile scroll reliability)
+// ─────────────────────────────────────────────────────────────
+function setAppHeight(){
+  const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  document.documentElement.style.setProperty('--app-vh', h + 'px');
+}
+setAppHeight();
+window.addEventListener('resize', setAppHeight);
+window.addEventListener('orientationchange', ()=>setTimeout(setAppHeight,150));
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', setAppHeight);
+  window.visualViewport.addEventListener('scroll', setAppHeight);
+}
+
+function forceReflow(el){
+  if(!el) return;
+  el.offsetHeight;
+  const prevDisplay = el.style.display;
+  el.style.display = 'none';
+  el.offsetHeight;
+  el.style.display = prevDisplay || '';
+}
+function forceReflowAllScrollPanels(){
+  document.querySelectorAll('.dash-scroll,.ana-scroll,.rain-scroll,.trend-scroll').forEach(forceReflow);
+}
+
+function onDomReady(fn){
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', fn);
+  else fn();
+}
+
+function wireScrollFadeHint(scrollEl){
+  if(!scrollEl) return;
+  const panel = scrollEl.closest('.panel');
+  if(!panel) return;
+  const update = ()=>{
+    const atBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 16;
+    panel.classList.toggle('at-bottom', atBottom || scrollEl.scrollHeight<=scrollEl.clientHeight+4);
+  };
+  scrollEl.addEventListener('scroll', update, {passive:true});
+  update();
+  window.addEventListener('resize', update);
+  setTimeout(update, 300);
+}
+onDomReady(()=>{
+  document.querySelectorAll('.dash-scroll,.ana-scroll,.rain-scroll,.trend-scroll,.tbl-wrap').forEach(wireScrollFadeHint);
+});
+
+// Responsive device-aware chart sizing: recompute chart heights whenever
+// the viewport size or orientation genuinely changes (not on every pixel
+// of an animation), via ResizeObserver on the app root, so charts on
+// mobile fit fully on screen and charts on desktop scale up to use the
+// available space instead of staying phone-sized.
+let _lastVW = 0, _lastVH = 0;
+function applyResponsiveChartSizing(){
+  const vw = window.innerWidth, vh = window.innerHeight;
+  if(Math.abs(vw-_lastVW)<2 && Math.abs(vh-_lastVH)<2) return;
+  _lastVW = vw; _lastVH = vh;
+  document.documentElement.style.setProperty('--is-mobile', vw<=480 ? '1':'0');
+  resizeAllCharts();
+  resizeRainCharts();
+}
+window.addEventListener('resize', ()=>{ clearTimeout(window._rszT); window._rszT=setTimeout(applyResponsiveChartSizing,150); });
+window.addEventListener('orientationchange', ()=>setTimeout(applyResponsiveChartSizing,200));
+if('ResizeObserver' in window){
+  onDomReady(()=>{
+    const ro = new ResizeObserver(()=>{ clearTimeout(window._roT); window._roT=setTimeout(applyResponsiveChartSizing,120); });
+    ro.observe(document.body);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// CLOCK
+// ─────────────────────────────────────────────────────────────
+setInterval(()=>{
+  document.getElementById('liveClock').textContent = new Date().toLocaleTimeString('id-ID');
+},1000);
+
+// ─────────────────────────────────────────────────────────────
+// STATUS HELPERS
+// ─────────────────────────────────────────────────────────────
+function getSK(d){
+  const k = (d['Kondisi']||d['Keterangan']||'').toLowerCase().trim();
+  const volRaw = (d['Volume (M3)']||'').toString().toLowerCase().trim();
+  const s = (d['Status']||'').toLowerCase().trim();
+  if(k.includes('overflow')) return 'overflow';
+  if(k.includes('lumpur')||volRaw.includes('lumpur')) return 'lumpur';
+  const elev = getLatestElev(d);
+  if(!elev && elev !== 0) return 'missing';
+  if(s.includes('updated')||s.includes('baru')) return 'updated';
+  return 'normal';
+}
+
+const ELEV_SANITY_MIN = -1000, ELEV_SANITY_MAX = 1000;
+function sanitizeElev(v){
+  if(v===null) return null;
+  if(v < ELEV_SANITY_MIN || v > ELEV_SANITY_MAX){
+    console.warn('Nilai elevasi di luar rentang wajar, diabaikan:', v);
+    return null;
+  }
+  return v;
+}
+
+function getLatestElev(d){
+  for(let i=WEEK_COLS.length-1;i>=0;i--){
+    const v = sanitizeElev(parseFlexNum(d[WEEK_COLS[i]]));
+    if(v!==null) return v;
+  }
+  const e = d['Elevation']??d['Elevasi']??'';
+  const pe = sanitizeElev(parseFlexNum(e));
+  if(pe!==null) return pe;
+  return null;
+}
+
+function getWeeklyData(d){
+  return WEEK_COLS.map(w=>sanitizeElev(parseFlexNum(d[w])));
+}
+
+function getDelta(d){
+  const explicit = parseFlexNum(d['Delta Elevasi (m)']);
+  if(explicit!==null) return explicit;
+  const vals = getWeeklyData(d).filter(v=>v!==null);
+  if(vals.length<2) return null;
+  return vals[vals.length-1] - vals[0];
+}
+
+function getTrend(d){
+  const vals = getWeeklyData(d).filter(v=>v!==null);
+  if(vals.length<2) return 'stable';
+  const diff = vals[vals.length-1] - vals[vals.length-2];
+  if(diff > 0.01) return 'rising';
+  if(diff < -0.01) return 'falling';
+  return 'stable';
+}
+
+const SKcol = {overflow:'var(--red)',lumpur:'var(--amber)',normal:'var(--teal)',updated:'var(--blue)',missing:'var(--t3)'};
+const SKlbl = {overflow:'Overflow',lumpur:'Lumpur',normal:'Normal',updated:'Updated',missing:'Missing'};
+const SKbadge = {overflow:'bR',lumpur:'bA',normal:'bT',updated:'bB',missing:'bG'};
+const hexCol = {overflow:'#FF4F4F',lumpur:'#FFB730',normal:'#00E5C8',updated:'#3B9EFF',missing:'#3E5472'};
+
+function badge(sk){return `<span class="badge ${SKbadge[sk]}"><span class="b-dot"></span>${SKlbl[sk]}</span>`}
+function eCol(e){
+  if(e===null||e===undefined||isNaN(+e)) return 'var(--t3)';
+  const v=+e;
+  if(v<-80) return 'var(--red)';
+  if(v<-30) return 'var(--amber)';
+  if(v<0) return 'var(--purple)';
+  return 'var(--teal)';
+}
+function fmtE(e,plus=true){
+  if(e===null||e===undefined||e===''||isNaN(+e)) return '—';
+  const v=parseFloat(e);
+  if(isNaN(v)) return '—';
+  return (plus&&v>0?'+':'')+v.toFixed(3);
+}
+function fmtD(s){
+  if(!s) return '—';
+  try{const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})}
+  catch{return s}
+}
+
+function getEffectiveUpdateDate(d){
+  const explicit = d['Tanggal Update Terakhir']||d['Tanggal Update']||'';
+  if(explicit) return explicit;
+  for(let i=WEEK_COLS.length-1;i>=0;i--){
+    if(parseFlexNum(d[WEEK_COLS[i]])!==null) return WEEK_COLS[i];
+  }
+  return '';
+}
+
+// ─────────────────────────────────────────────────────────────
+// LOCAL CACHE FALLBACK (offline / fetch-failure resilience)
+// ─────────────────────────────────────────────────────────────
+const CACHE_KEY = 'aquamin_last_good_csv_v1';
+function cacheRawCSV(text){
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({t:Date.now(), csv:text})); }catch(e){}
+}
+function readCachedCSV(){
+  try{
+    const raw = localStorage.getItem(CACHE_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+
+// ─────────────────────────────────────────────────────────────
+// LOAD DATA
+// ─────────────────────────────────────────────────────────────
+async function loadData(){
+  const btn = document.getElementById('syncBtn');
+  btn.classList.add('spinning');
+  setLoadTxt('Mengambil data dari Google Sheets...');
+  try{
+    const csvText = await fetch(SHEET_PUBHTML).then(r=>{
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.text();
+    });
+    cacheRawCSV(csvText);
+    parseAndBuild(csvText);
+    const now = new Date();
+    document.getElementById('hdrStatus').textContent = `Sync ${now.toLocaleTimeString('id-ID')} · ${DATA.length} pit · periode ${getWeekLabels().slice(-1)[0]||'—'}`;
+    showToast(`✓ ${DATA.length} pit berhasil dimuat`,'ok');
+    document.getElementById('loadScreen').classList.add('hide');
+  }catch(e){
+    console.error(e);
+    // Fallback: try last-known-good cached CSV so the dashboard still
+    // shows something useful instead of a blank error state.
+    const cached = readCachedCSV();
+    if(cached && cached.csv){
+      try{
+        parseAndBuild(cached.csv);
+        const ageMin = Math.round((Date.now()-cached.t)/60000);
+        document.getElementById('hdrStatus').textContent = `⚠ Data cache (${ageMin} menit lalu) · offline`;
+        showToast('Gagal sync — menampilkan data cache terakhir','warn');
+        document.getElementById('loadScreen').classList.add('hide');
+        btn.classList.remove('spinning');
+        return;
+      }catch(e2){ console.error('Cache parse failed too:', e2); }
+    }
+    showToast('Gagal memuat data — periksa koneksi','err');
+    setLoadTxt('Gagal memuat. Tap Sync untuk coba lagi.');
+    document.getElementById('loadScreen').classList.add('hide');
+  }
+  btn.classList.remove('spinning');
+}
+
+function parseAndBuild(csvText){
+  const r = Papa.parse(csvText,{header:true,skipEmptyLines:true});
+  if(!r.data||!r.data.length) throw new Error('No data');
+  WEEK_COLS = detectWeekColumns(r.data);
+  buildWeekLabelOverrides(WEEK_COLS, r.data);
+  DATA = r.data.map(row=>{
+    const e = row['Easting']||row['easting']||'';
+    const n = row['Northing']||row['northing']||'';
+    const ll = (e&&n) ? toLL(e,n) : null;
+    return{...row, _ll:ll, _sk:null, _delta:null, _trend:null};
+  }).filter(d => {
+    const pitName = (d['Pit']||d['pit']||'').toString().trim();
+    return pitName.length>0;
+  });
+  if(!DATA.length){
+    throw new Error('Tidak ada baris dengan kolom "Pit" terisi — periksa apakah header sheet sesuai format AQUAMIN.');
+  }
+  DATA.forEach(d=>{
+    d._elev = getLatestElev(d);
+    d._sk = getSK(d);
+    d._delta = getDelta(d);
+    d._trend = getTrend(d);
+    d._weekly = getWeeklyData(d);
+    d._nearestStation = findNearestStation(d._ll);
+    d._projection = projectElevation(d._weekly, 3);
+  });
+  FILTERED = [...DATA];
+  buildAll();
+  checkOverflowAlerts();
+}
+function setLoadTxt(t){ document.getElementById('loadTxt').textContent = t; }
+
+// ─────────────────────────────────────────────────────────────
+// BUILD ALL
+// ─────────────────────────────────────────────────────────────
+function buildAll(){
+  buildRibbon();
+  buildDashboard();
+  buildInsights();
+  buildMapMarkers();
+  buildTable();
+  buildAnalysis();
+  populateFilters();
+  buildTrendPanel();
+  populateCompareSelects();
+  buildCorrelationCard();
+  updatePeriodInfo();
+}
+
+function updatePeriodInfo(){
+  const el = document.getElementById('trendChartSub');
+  if(!el || !WEEK_COLS.length) return;
+  const labels = getWeekLabels();
+  if(labels.length>1){
+    el.textContent = `Grafik elevasi level air seluruh pit dari ${labels[0]} sampai ${labels[labels.length-1]} (${WEEK_COLS.length} titik data). Klik pit di bawah untuk fokus.`;
+  }else if(labels.length===1){
+    el.textContent = `Data elevasi periode ${labels[0]}. Klik pit di bawah untuk fokus.`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// AUTO-GENERATED EXECUTIVE INSIGHTS
+// ─────────────────────────────────────────────────────────────
+// Builds a short, human-readable summary from the current dataset:
+// how many pits need attention, which are rising fastest, and a
+// one-line operational recommendation. This turns raw numbers into
+// something a manager can read in 10 seconds without opening the table.
+function buildInsights(){
+  const card = document.getElementById('insightCard');
+  const body = document.getElementById('insightBody');
+  if(!DATA.length){ card.style.display='none'; return; }
+
+  const overflow = DATA.filter(d=>d._sk==='overflow');
+  const rising = DATA.filter(d=>d._trend==='rising').sort((a,b)=>(b._delta||0)-(a._delta||0));
+  const missing = DATA.filter(d=>d._sk==='missing');
+  const withE = DATA.filter(d=>d._elev!==null).map(d=>d._elev);
+  const avgElev = withE.length ? (withE.reduce((a,v)=>a+v,0)/withE.length) : null;
+
+  const lines = [];
+  if(overflow.length){
+    const names = overflow.slice(0,3).map(d=>d['Pit']).join(', ');
+    lines.push(`🔴 <b>${overflow.length} pit dalam status Overflow</b>${overflow.length>3?` (termasuk ${names}, dan lainnya)`:` (${names})`} — perlu tindakan pompa/dewatering segera.`);
+  }else{
+    lines.push(`🟢 Tidak ada pit dalam status Overflow saat ini — kondisi terkendali.`);
+  }
+  if(rising.length){
+    const top = rising[0];
+    lines.push(`📈 Pit dengan kenaikan elevasi tercepat: <b>${top['Pit']}</b> (${top._delta>0?'+':''}${top._delta.toFixed(2)}m) — pantau lebih ketat pada periode berikutnya.`);
+  }
+  if(missing.length>0){
+    lines.push(`❓ ${missing.length} pit tidak memiliki data elevasi terbaru — verifikasi pengambilan data lapangan.`);
+  }
+  if(avgElev!==null){
+    lines.push(`📊 Rata-rata elevasi seluruh pit saat ini: <b>${avgElev.toFixed(1)} mdpl</b> dari ${withE.length} pit dengan data valid.`);
+  }
+  const pct = DATA.length ? Math.round((overflow.length/DATA.length)*100) : 0;
+  if(pct>=15){
+    lines.push(`⚠️ ${pct}% dari total pit berstatus overflow — indikasi risiko sistemik, pertimbangkan eskalasi ke tim manajemen air.`);
+  }
+
+  body.innerHTML = lines.map(l=>`<div style="padding:4px 0;border-bottom:1px dashed rgba(255,255,255,.05)">${l}</div>`).join('');
+  card.style.display = '';
+}
+
+// ─────────────────────────────────────────────────────────────
+// RIBBON
+// ─────────────────────────────────────────────────────────────
+function buildRibbon(){
+  const counts = DATA.reduce((a,d)=>{a[d._sk]=(a[d._sk]||0)+1;return a},{});
+  const withE = DATA.filter(d=>d._elev!==null);
+  const elevs = withE.map(d=>d._elev);
+  const minE = elevs.length ? Math.min(...elevs) : null;
+  const maxE = elevs.length ? Math.max(...elevs) : null;
+  const minPit = minE!==null ? DATA.find(d=>d._elev===minE) : null;
+  const maxPit = maxE!==null ? DATA.find(d=>d._elev===maxE) : null;
+
+  document.getElementById('kn-all').textContent = DATA.length;
+  document.getElementById('kn-overflow').textContent = counts.overflow||0;
+  document.getElementById('kd-overflow').textContent = counts.overflow ? '⚠ Butuh Aksi' : '';
+  document.getElementById('kn-lumpur').textContent = counts.lumpur||0;
+  document.getElementById('kn-missing').textContent = counts.missing||0;
+  document.getElementById('kn-minelev').textContent = minE!==null ? minE.toFixed(1)+'m' : '—';
+  document.getElementById('kd-minelev').textContent = minPit ? (minPit['Pit']||'').substring(0,12) : '';
+  document.getElementById('kn-maxelev').textContent = maxE!==null ? maxE.toFixed(1)+'m' : '—';
+  document.getElementById('kd-maxelev').textContent = maxPit ? (maxPit['Pit']||'').substring(0,12) : '';
+}
+
+// ─────────────────────────────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────────────────────────────
+function buildDashboard(){
+  const areas = {};
+  DATA.forEach(d=>{
+    const a = ((d['Area']||d['Keterangan']||'Tidak Diketahui')).trim().toUpperCase()||'LAINNYA';
+    if(!areas[a]) areas[a] = {total:0,overflow:0,lumpur:0,normal:0,missing:0,updated:0,elevs:[],deltas:[]};
+    areas[a].total++;
+    areas[a][d._sk] = (areas[a][d._sk]||0)+1;
+    if(d._elev!==null) areas[a].elevs.push(d._elev);
+    if(d._delta!==null) areas[a].deltas.push(d._delta);
+  });
+
+  const aEl = document.getElementById('areaGrid');
+  aEl.innerHTML = '';
+  Object.entries(areas).sort((a,b)=>b[1].total-a[1].total).forEach(([name,s],i)=>{
+    const minE = s.elevs.length ? Math.min(...s.elevs).toFixed(1) : '—';
+    const avgE = s.elevs.length ? (s.elevs.reduce((a,v)=>a+v,0)/s.elevs.length).toFixed(1) : '—';
+    const pct = (v,t) => t ? v/t*100 : 0;
+    const avgDelta = s.deltas.length ? (s.deltas.reduce((a,v)=>a+v,0)/s.deltas.length).toFixed(2) : null;
+    const trendIcon = avgDelta===null?'→':(+avgDelta>0?'▲':+avgDelta<0?'▼':'→');
+    const trendCol = avgDelta===null?'var(--t3)':(+avgDelta>0?'var(--red)':+avgDelta<0?'var(--teal)':'var(--t3)');
+
+    const div = document.createElement('div');
+    div.className = 'area-card';
+    div.style.animationDelay = (i*0.05)+'s';
+    div.onclick = () => filterByArea(name);
+    div.innerHTML = `
+      <div class="area-card-head">
+        <div class="area-card-name">${name}</div>
+        <div class="area-card-count">${s.total} pit</div>
+      </div>
+      <div class="area-bar">
+        <div class="area-bar-seg" style="width:${pct(s.overflow,s.total)}%;background:var(--red)"></div>
+        <div class="area-bar-seg" style="width:${pct(s.lumpur,s.total)}%;background:var(--amber)"></div>
+        <div class="area-bar-seg" style="width:${pct(s.normal+s.updated,s.total)}%;background:var(--teal)"></div>
+        <div class="area-bar-seg" style="width:${pct(s.missing,s.total)}%;background:var(--bg4)"></div>
+      </div>
+      <div class="area-stat-row">
+        <div class="area-stat"><div class="area-stat-n" style="color:var(--red)">${s.overflow||0}</div><div class="area-stat-l">Overflow</div></div>
+        <div class="area-stat"><div class="area-stat-n" style="color:var(--amber)">${s.lumpur||0}</div><div class="area-stat-l">Lumpur</div></div>
+        <div class="area-stat"><div class="area-stat-n" style="color:var(--teal)">${minE}m</div><div class="area-stat-l">Min Elev</div></div>
+        <div class="area-stat"><div class="area-stat-n" style="color:${trendCol}">${trendIcon} ${avgDelta!==null?Math.abs(avgDelta).toFixed(2):'—'}</div><div class="area-stat-l">Avg Delta/Mgg</div></div>
+      </div>
+    `;
+    aEl.appendChild(div);
+  });
+
+  const alerts = DATA.filter(d=>d._sk==='overflow'||d._sk==='missing')
+    .sort((a,b)=>{
+      if(a._sk==='overflow'&&b._sk!=='overflow') return -1;
+      if(a._sk!=='overflow'&&b._sk==='overflow') return 1;
+      return (a._elev||0)-(b._elev||0);
+    }).slice(0,10);
+  document.getElementById('alertList').innerHTML = alerts.length
+    ? alerts.map((d,i)=>{
+        const idx = DATA.indexOf(d);
+        return `<div class="alert-row ${d._sk==='overflow'?'critical':'warning'}" onclick="showDetail(${idx})" style="animation-delay:${i*0.04}s">
+          <div class="alert-icon" style="background:${d._sk==='overflow'?'rgba(255,79,79,.1)':'rgba(62,84,114,.2)'}">${d._sk==='overflow'?'🌊':'❓'}</div>
+          <div class="alert-body">
+            <div class="alert-name">${d['Pit']||'—'}</div>
+            <div class="alert-meta">${((d['Area']||d['Keterangan']||'').trim())||'—'} · ${d['Kontraktor']||'—'} · ${fmtD(getEffectiveUpdateDate(d))}</div>
+          </div>
+          <div class="alert-elev" style="color:${eCol(d._elev)}">${fmtE(d._elev)} m</div>
+          ${badge(d._sk)}
+        </div>`;
+      }).join('')
+    : '<div style="font-size:12px;color:var(--t3);padding:12px 0">✓ Tidak ada pit yang memerlukan perhatian segera.</div>';
+
+  const contractors = {};
+  DATA.forEach(d=>{
+    const c = (d['Kontraktor']||'Tidak Diketahui').trim()||'Lainnya';
+    if(!contractors[c]) contractors[c]={total:0,overflow:0,lumpur:0,elevs:[]};
+    contractors[c].total++;
+    contractors[c][d._sk]=(contractors[c][d._sk]||0)+1;
+    if(d._elev!==null) contractors[c].elevs.push(d._elev);
+  });
+  document.getElementById('contractorGrid').innerHTML = Object.entries(contractors).sort((a,b)=>b[1].total-a[1].total).map(([name,s])=>{
+    const avg = s.elevs.length ? (s.elevs.reduce((a,v)=>a+v,0)/s.elevs.length).toFixed(1) : '—';
+    return `<div class="con-card">
+      <div class="con-name" title="${name}">${name}</div>
+      <div class="con-row"><span>Total Pit</span><span class="con-val">${s.total}</span></div>
+      <div class="con-row"><span>Overflow</span><span class="con-val" style="color:var(--red)">${s.overflow||0}</span></div>
+      <div class="con-row"><span>Lumpur</span><span class="con-val" style="color:var(--amber)">${s.lumpur||0}</span></div>
+      <div class="con-row"><span>Rata-rata Elev</span><span class="con-val" style="color:var(--cyan)">${avg}m</span></div>
+    </div>`;
+  }).join('');
+
+  forceReflow(document.querySelector('#panel-dashboard .dash-scroll'));
+}
+function setTrendView(v){
+  trendView = v;
+  ['all','overflow','rising','falling'].forEach(k=>{
+    document.getElementById('trendBtn'+k.charAt(0).toUpperCase()+k.slice(1)).classList.toggle('on',k===v);
+  });
+  buildTrendPanel();
+}
+
+function buildTrendPanel(){
+  const areaFilter = document.getElementById('trendAreaFilter').value;
+  let pits = DATA.filter(d=>{
+    const area = ((d['Area']||d['Keterangan']||'').trim().toUpperCase());
+    if(areaFilter && area !== areaFilter) return false;
+    if(trendView==='overflow') return d._sk==='overflow';
+    if(trendView==='rising') return d._trend==='rising';
+    if(trendView==='falling') return d._trend==='falling';
+    return d._weekly.some(v=>v!==null);
+  });
+
+  document.getElementById('trendCount').textContent = pits.length+' pit';
+
+  const sel = document.getElementById('trendPitSelect');
+  const curVal = sel.value;
+  sel.innerHTML = '<option value="">— Pilih Pit untuk Detail —</option>' +
+    pits.map((d,i)=>`<option value="${DATA.indexOf(d)}">${d['Pit']||'—'} (${((d['Area']||d['Keterangan']||'').trim())||'?'})</option>`).join('');
+  if(curVal) sel.value = curVal;
+
+  buildMainTrendChart(pits);
+  buildMiniTrends(pits);
+}
+
+// A high-contrast, maximally distinct palette — chosen so that adjacent
+// colors in the list are never close in hue, which matters a lot once
+// 10+ series share one chart. Brightness is kept consistently high so
+// every line reads clearly against the dark background.
+const CHART_COLORS = [
+  '#3B9EFF','#FF4F4F','#34D399','#FFB730','#A78BFA','#22D3EE',
+  '#F472B6','#84CC16','#FB923C','#818CF8','#2DD4BF','#F87171',
+  '#FACC15','#60A5FA','#E879F9','#4ADE80',
+];
+
+// Custom Chart.js plugin: adds a soft glow (shadow) behind every drawn
+// line, which makes overlapping trend lines noticeably easier to
+// distinguish and gives the whole dashboard a more premium, "control
+// room" feel instead of flat lines on a flat background.
+const glowLinePlugin = {
+  id:'glowLine',
+  beforeDatasetsDraw(chart){
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.55)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 2;
+  },
+  afterDatasetsDraw(chart){
+    chart.ctx.restore();
+  }
+};
+if(window.Chart) Chart.register(glowLinePlugin);
+
+function isMobileViewport(){ return window.innerWidth <= 480; }
+
+function buildMainTrendChart(pits){
+  const limitedPits = pits.slice(0,16);
+  const mobile = isMobileViewport();
+  const datasets = limitedPits.map((d,i)=>{
+    const vals = d._weekly;
+    const col = CHART_COLORS[i % CHART_COLORS.length];
+    return {
+      label: d['Pit']||'—',
+      data: vals,
+      borderColor: col,
+      backgroundColor: col,
+      borderWidth: 2.5,
+      pointRadius: mobile?2:3,
+      pointHoverRadius: 8,
+      pointHoverBorderWidth:2,
+      pointBackgroundColor: col,
+      pointBorderColor: '#0B1220',
+      pointBorderWidth: 1,
+      tension: 0.35,
+      fill: false,
+      spanGaps: true,
+      borderDash: d._sk==='missing' ? [5,4] : [],
+      datalabels:{
+        display:mobile ? false : (ctx)=>{
+          const arr = ctx.dataset.data;
+          let lastIdx = -1;
+          for(let k=arr.length-1;k>=0;k--){ if(arr[k]!==null){lastIdx=k;break;} }
+          return ctx.dataIndex===lastIdx;
+        },
+        align:'right', anchor:'end', offset:6,
+        color:col, font:{size:10,weight:'700',family:"'JetBrains Mono',monospace"},
+        formatter:(v)=> v!==null? v.toFixed(2)+'m' : '',
+      },
+    };
+  });
+
+  if(charts.trendMain) charts.trendMain.destroy();
+
+  charts.trendMain = new Chart(document.getElementById('chartTrendMain'),{
+    type:'line',
+    data:{labels:getWeekLabels(), datasets},
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      resizeDelay:80,
+      animation:{duration:900,easing:'easeOutQuart'},
+      transitions:{active:{animation:{duration:250}}},
+      layout:{padding:{right:mobile?12:54}},
+      plugins:{
+        legend:{
+          labels:{color:'#8BA4C4',font:{size:10,family:"'Inter',sans-serif"},boxWidth:12,usePointStyle:true,pointStyleWidth:10},
+          position:'bottom',
+          maxHeight:60,
+        },
+        tooltip:{
+          enabled:true,
+          backgroundColor:'rgba(8,14,26,.95)',
+          borderColor:'rgba(59,158,255,.3)',
+          borderWidth:1,
+          titleColor:'#EEF4FF',
+          bodyColor:'#8BA4C4',
+          padding:10,
+          callbacks:{
+            label:ctx=>`  ${ctx.dataset.label}: ${ctx.raw!==null?ctx.raw.toFixed(3)+'m':'—'}`
+          }
+        }
+      },
+      scales:{
+        x:{ticks:{color:'#3E5472',font:{size:mobile?8:10},maxRotation:mobile?60:0},grid:{color:'rgba(255,255,255,.04)'}},
+        y:{
+          ticks:{color:'#3E5472',font:{size:10,family:"'JetBrains Mono',monospace"},callback:v=>v+'m'},
+          grid:{color:'rgba(255,255,255,.04)'},
+          title:{display:!mobile,text:'Elevasi (mdpl)',color:'#3E5472',font:{size:10}}
+        }
+      },
+      interaction:{mode:'index',intersect:false},
+    }
+  });
+}
+
+function updateMainTrendChart(){
+  const idx = +document.getElementById('trendPitSelect').value;
+  if(!idx && idx!==0) return;
+  const d = DATA[idx];
+  if(!d) return;
+  showDetail(idx);
+}
+
+function buildMiniTrends(pits){
+  Object.values(sparkCharts).forEach(c=>c.destroy());
+  sparkCharts = {};
+
+  const grid = document.getElementById('trendMiniGrid');
+  grid.innerHTML = '';
+
+  pits.forEach((d,i)=>{
+    const idx = DATA.indexOf(d);
+    const delta = d._delta;
+    const trend = d._trend;
+    const trendColor = trend==='rising'?'var(--red)':trend==='falling'?'var(--teal)':'var(--t3)';
+    const trendIcon = trend==='rising'?'▲':trend==='falling'?'▼':'→';
+    const elev = d._elev;
+    const sk = d._sk;
+    const filledCount = d._weekly.filter(v=>v!==null).length;
+    const totalCount = d._weekly.length;
+
+    const div = document.createElement('div');
+    div.className = 'trend-mini';
+    div.style.animationDelay = (i*0.03)+'s';
+    const canvasId = `spark_${idx}`;
+    div.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div class="trend-mini-name" title="${d['Pit']}">${d['Pit']||'—'}</div>
+        ${badge(sk)}
+      </div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between">
+        <div>
+          <div class="trend-mini-elev" style="color:${eCol(elev)}">${elev!==null?elev.toFixed(1):'—'}<span style="font-size:10px;color:var(--t3)">m</span></div>
+          <div class="trend-mini-delta" style="color:${trendColor}">${trendIcon} ${delta!==null?(delta>0?'+':'')+delta.toFixed(2)+'m':'—'}</div>
+        </div>
+        <div style="font-size:9px;color:var(--t3);text-align:right">${((d['Area']||d['Keterangan']||'').trim())||'—'}<br>${d['Kontraktor']||'—'}<br><span style="opacity:.7">${filledCount}/${totalCount} data</span></div>
+      </div>
+      <canvas id="${canvasId}" class="spark-canvas" height="36"></canvas>
+    `;
+    div.addEventListener('click',()=>showDetail(idx));
+    grid.appendChild(div);
+
+    setTimeout(()=>{
+      const canvas = document.getElementById(canvasId);
+      if(!canvas) return;
+      const vals = d._weekly;
+      const validVals = vals.filter(v=>v!==null);
+      if(validVals.length < 2) return;
+
+      const col = sk==='overflow'?'#FF4F4F':sk==='lumpur'?'#FFB730':trend==='rising'?'#FF4F4F':'#00E5C8';
+
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createLinearGradient(0,0,0,36);
+      grad.addColorStop(0,col+'40');
+      grad.addColorStop(1,col+'00');
+
+      sparkCharts[canvasId] = new Chart(canvas,{
+        type:'line',
+        data:{
+          labels:getWeekLabels(),
+          datasets:[{data:vals,borderColor:col,backgroundColor:grad,fill:true,tension:0.4,pointRadius:0,borderWidth:1.5,spanGaps:true}]
+        },
+        options:{
+          responsive:false,
+          animation:{duration:600,delay:i*30},
+          plugins:{legend:{display:false},tooltip:{enabled:false}},
+          scales:{x:{display:false},y:{display:false}},
+        }
+      });
+    },50);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// COMPARE 2 PITS
+// ─────────────────────────────────────────────────────────────
+let chartCompare = null;
+function populateCompareSelects(){
+  const opts = '<option value="">— Pilih Pit —</option>' +
+    DATA.map((d,i)=>`<option value="${i}">${d['Pit']||'—'} (${((d['Area']||d['Keterangan']||'').trim())||'?'})</option>`).join('');
+  ['comparePitA','comparePitB'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = opts;
+    if(cur) sel.value = cur;
+  });
+}
+function buildCompareChart(){
+  const idxA = document.getElementById('comparePitA').value;
+  const idxB = document.getElementById('comparePitB').value;
+  const emptyEl = document.getElementById('compareEmpty');
+  const contentEl = document.getElementById('compareContent');
+  if(idxA===''||idxB===''){
+    emptyEl.style.display='';
+    contentEl.style.display='none';
+    return;
+  }
+  const dA = DATA[+idxA], dB = DATA[+idxB];
+  if(!dA||!dB) return;
+  emptyEl.style.display='none';
+  contentEl.style.display='';
+
+  if(chartCompare) chartCompare.destroy();
+  chartCompare = new Chart(document.getElementById('chartCompare'),{
+    type:'line',
+    data:{
+      labels:getWeekLabels(),
+      datasets:[
+        {label:dA['Pit']||'Pit A', data:dA._weekly, borderColor:'#3B9EFF', backgroundColor:'rgba(59,158,255,.12)', fill:true, tension:.35, borderWidth:2.5, pointRadius:3, spanGaps:true},
+        {label:dB['Pit']||'Pit B', data:dB._weekly, borderColor:'#FF4F4F', backgroundColor:'rgba(255,79,79,.12)', fill:true, tension:.35, borderWidth:2.5, pointRadius:3, spanGaps:true},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:{duration:700,easing:'easeOutQuart'},
+      plugins:{
+        legend:{labels:{color:'#8BA4C4',font:{size:10},boxWidth:10,usePointStyle:true}},
+        tooltip:{backgroundColor:'rgba(8,14,26,.95)',borderColor:'rgba(59,158,255,.3)',borderWidth:1,titleColor:'#EEF4FF',bodyColor:'#8BA4C4'},
+      },
+      scales:{
+        x:{ticks:{color:'#3E5472',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}},
+        y:{ticks:{color:'#3E5472',font:{size:10,family:"'JetBrains Mono',monospace"},callback:v=>v+'m'},grid:{color:'rgba(255,255,255,.04)'}}
+      },
+      interaction:{mode:'index',intersect:false},
+    }
+  });
+
+  const corr = pearsonCorrelation(dA._weekly, dB._weekly);
+  const elevDiff = (dA._elev!==null&&dB._elev!==null) ? (dA._elev-dB._elev) : null;
+  const corrLabel = corr===null?'—':corr>0.7?'Sangat mirip':corr>0.3?'Cukup mirip':corr>-0.3?'Tidak berkorelasi':'Berlawanan arah';
+  document.getElementById('compareStatRow').innerHTML = `
+    <div class="compare-stat"><div class="compare-stat-l">Elevasi ${dA['Pit']}</div><div class="compare-stat-v" style="color:${eCol(dA._elev)}">${fmtE(dA._elev)}m</div></div>
+    <div class="compare-stat"><div class="compare-stat-l">Elevasi ${dB['Pit']}</div><div class="compare-stat-v" style="color:${eCol(dB._elev)}">${fmtE(dB._elev)}m</div></div>
+    <div class="compare-stat"><div class="compare-stat-l">Selisih Elevasi</div><div class="compare-stat-v">${elevDiff!==null?(elevDiff>0?'+':'')+elevDiff.toFixed(2)+'m':'—'}</div></div>
+    <div class="compare-stat"><div class="compare-stat-l">Korelasi Tren</div><div class="compare-stat-v" style="color:${corr!==null&&corr>0.3?'var(--teal)':'var(--t3)'}">${corr!==null?corr.toFixed(2):'—'} <span style="font-size:9px;color:var(--t3)">(${corrLabel})</span></div></div>
+  `;
+}
+
+// ─────────────────────────────────────────────────────────────
+// MAP
+// ─────────────────────────────────────────────────────────────
+const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM',maxZoom:19});
+const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19});
+const map = L.map('map',{zoomControl:false}).setView([-3.8,115.5],10);
+L.control.zoom({position:'bottomleft'}).addTo(map);
+L.control.scale({position:'bottomright',imperial:false}).addTo(map);
+osmLayer.addTo(map);
+
+// Marker clustering: groups nearby pits into a single badge until the user
+// zooms in, which keeps the map readable and fast even with hundreds of
+// pits, instead of hundreds of overlapping dots. The cluster badge color
+// reflects the worst status inside it (red if any child is overflow, amber
+// if any is lumpur, blue otherwise) so risk is visible even before zooming.
+if(window.L && L.markerClusterGroup){
+  clusterGroup = L.markerClusterGroup({
+    maxClusterRadius:50,
+    spiderfyOnMaxZoom:true,
+    showCoverageOnHover:false,
+    iconCreateFunction(cluster){
+      const children = cluster.getAllChildMarkers();
+      let sevClass = 'c-low';
+      if(children.some(m=>m.options.sk==='overflow')) sevClass='c-high';
+      else if(children.some(m=>m.options.sk==='lumpur')) sevClass='c-mid';
+      const count = children.length;
+      const size = count>50?52:count>15?44:36;
+      return L.divIcon({
+        html:`<div class="aqua-cluster ${sevClass}" style="width:${size}px;height:${size}px;font-size:${size>44?14:12}px">${count}</div>`,
+        className:'', iconSize:[size,size]
+      });
+    }
+  });
+  clusterGroup.addTo(map);
+}
+
+function toggleLayer(){
+  useSat = !useSat;
+  if(useSat){map.removeLayer(osmLayer);satLayer.addTo(map);}
+  else{map.removeLayer(satLayer);osmLayer.addTo(map);}
+  document.getElementById('mapLayerBtn').innerHTML = useSat
+    ? '<svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> OSM'
+    : '<svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> Satelit';
+}
+function fitMap(){
+  if(mapMarkers.length){const g=L.featureGroup(mapMarkers);map.fitBounds(g.getBounds().pad(.1))}
+  else{
+    // No pit markers yet (e.g. before first data load) — fall back to
+    // fitting the known rainfall-station AOI so the map is never left
+    // sitting at a generic, un-zoomed world view.
+    const pts = RAIN_STATIONS.map(s=>[s.lat,s.lng]);
+    if(pts.length) map.fitBounds(L.latLngBounds(pts).pad(.3));
+  }
+}
+function searchMapPit(q){
+  if(!q) return;
+  const found = DATA.find(d=>(d['Pit']||'').toLowerCase().includes(q.toLowerCase()));
+  if(found&&found._ll){
+    map.setView(found._ll,16);
+    if(clusterGroup){
+      // Zooming to a single pit that's currently folded inside a cluster
+      // needs an explicit "spiderfy" so its individual marker (and popup)
+      // actually becomes clickable/visible rather than staying hidden
+      // inside a cluster badge at this zoom level.
+      const marker = mapMarkers.find(m=>m._aquaPitIdx===DATA.indexOf(found));
+      if(marker) setTimeout(()=>{ clusterGroup.zoomToShowLayer(marker, ()=>marker.openPopup()); },300);
+    }
+    showToast(`📍 Ditemukan: ${found['Pit']}`,'ok');
+  }
+}
+
+function buildMapMarkers(){
+  if(clusterGroup) clusterGroup.clearLayers();
+  else mapMarkers.forEach(m=>m.remove());
+  mapMarkers = [];
+  DATA.forEach((d,idx)=>{
+    if(!d._ll) return;
+    const sk = d._sk;
+    const col = hexCol[sk];
+    const delta = d._delta;
+    const trend = d._trend;
+    const trendArrow = trend==='rising'?'▲':trend==='falling'?'▼':'';
+    const trendCol = trend==='rising'?'#FF4F4F':trend==='falling'?'#00E5C8':'';
+    const size = sk==='overflow'?16:sk==='lumpur'?14:11;
+
+    const icon = L.divIcon({
+      className:'',
+      html:`<div style="width:${size}px;height:${size}px;background:${col};border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,.5),0 0 0 ${sk==='overflow'?'6px':'3px'} ${col}33;transition:transform .2s;cursor:pointer"></div>`,
+      iconSize:[size,size],iconAnchor:[size/2,size/2],popupAnchor:[0,-10]
+    });
+
+    const pop = `<div class="lp-n">${d['Pit']||'—'}</div>
+      <div class="lp-e" style="color:${col}">${fmtE(d._elev)} m</div>
+      <div class="lp-d">${((d['Area']||d['Keterangan']||'').trim())||'—'} · ${d['Kontraktor']||'—'}</div>
+      <div class="lp-b">${badge(sk)} ${delta!==null?`<span class="lp-delta" style="color:${trendCol}">${trendArrow} ${Math.abs(delta).toFixed(2)}m</span>`:''}</div>`;
+
+    // `sk` is stashed on the marker's own options so the cluster's
+    // iconCreateFunction can inspect the severity of everything folded
+    // inside a badge without needing a separate lookup table.
+    const m = L.marker(d._ll,{icon,sk}).bindPopup(pop).on('click',()=>showDetail(idx));
+    m._aquaPitIdx = idx;
+    if(clusterGroup) clusterGroup.addLayer(m);
+    else m.addTo(map);
+    mapMarkers.push(m);
+  });
+  // Auto zoom-to-AOI: every time markers are (re)built — which happens on
+  // initial load and every sync — automatically fit the map to the full
+  // set of pit locations, so the map always opens already framed on the
+  // area of interest instead of a generic default view the user has to
+  // manually zoom/pan away from.
+  if(mapMarkers.length){
+    const g=L.featureGroup(mapMarkers);
+    map.fitBounds(g.getBounds().pad(.08));
+    hasAutoFitOnce = true;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// FILTERS
+// ─────────────────────────────────────────────────────────────
+function populateFilters(){
+  const areas = [...new Set(DATA.map(d=>((d['Area']||d['Keterangan']||'').trim().toUpperCase())).filter(Boolean))].sort();
+  
+  ['fArea','trendAreaFilter'].forEach(id=>{
+    const sel = document.getElementById(id);
+    const keep = sel.options[0].outerHTML;
+    sel.innerHTML = keep + areas.map(a=>`<option value="${a}">${a}</option>`).join('');
+  });
+  
+  const cons = [...new Set(DATA.map(d=>(d['Kontraktor']||'').trim()).filter(Boolean))].sort();
+  document.getElementById('fContractor').innerHTML = '<option value="">Semua Kontraktor</option>' + cons.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
+function filterByStatus(sk){
+  document.getElementById('fStatus').value = sk;
+  goTab('table');
+  applyFilter();
+}
+function filterByArea(area){
+  document.getElementById('fArea').value = area;
+  goTab('table');
+  applyFilter();
+}
+function applyFilter(){
+  const q = document.getElementById('srchIn').value.toLowerCase();
+  const fSt = document.getElementById('fStatus').value;
+  const fAr = document.getElementById('fArea').value.toUpperCase();
+  const fCon = document.getElementById('fContractor').value.toLowerCase();
+  FILTERED = DATA.filter(d=>{
+    const aStr = ((d['Area']||d['Keterangan']||'').toUpperCase());
+    return (!q||(d['Pit']||'').toLowerCase().includes(q)||(d['Kontraktor']||'').toLowerCase().includes(q))
+      &&(!fSt||d._sk===fSt)
+      &&(!fAr||aStr.includes(fAr))
+      &&(!fCon||(d['Kontraktor']||'').toLowerCase().includes(fCon));
+  });
+  document.getElementById('rcCount').textContent = FILTERED.length+' pit';
+  renderTable();
+}
+
+// ─────────────────────────────────────────────────────────────
+// TABLE
+// ─────────────────────────────────────────────────────────────
+function buildTable(){
+  FILTERED = [...DATA];
+  document.getElementById('rcCount').textContent = DATA.length+' pit';
+  renderTable();
+}
+function sortTbl(key){
+  if(sortKey===key) sortDir*=-1; else{sortKey=key;sortDir=1;}
+  document.querySelectorAll('thead th').forEach(th=>th.classList.remove('asc','desc'));
+  const th = document.getElementById('th-'+key);
+  if(th) th.classList.add(sortDir===1?'asc':'desc');
+  FILTERED.sort((a,b)=>{
+    if(key==='Elevation') return ((a._elev??Infinity*sortDir)-(b._elev??Infinity*sortDir))*sortDir;
+    if(key==='Delta') return ((a._delta??Infinity*sortDir)-(b._delta??Infinity*sortDir))*sortDir;
+    if(key==='Tanggal Update Terakhir'){
+      const da=new Date(getEffectiveUpdateDate(a)), db=new Date(getEffectiveUpdateDate(b));
+      const va2=isNaN(da)?0:da.getTime(), vb2=isNaN(db)?0:db.getTime();
+      return (va2-vb2)*sortDir;
+    }
+    let va=a[key]??'',vb=b[key]??'';
+    if(typeof va==='string') return va.localeCompare(vb)*sortDir;
+    return (va-vb)*sortDir;
+  });
+  renderTable();
+}
+function renderTable(){
+  const tb = document.getElementById('tblBody');
+  if(!FILTERED.length){
+    tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--t3)">Tidak ada data yang cocok</td></tr>';
+    return;
+  }
+  tb.innerHTML = FILTERED.map(d=>{
+    const idx = DATA.indexOf(d);
+    const delta = d._delta;
+    const trendCol = d._trend==='rising'?'var(--red)':d._trend==='falling'?'var(--teal)':'var(--t3)';
+    const trendArrow = d._trend==='rising'?'▲':d._trend==='falling'?'▼':'→';
+    const tglUpdate = getEffectiveUpdateDate(d);
+    return `<tr onclick="showDetail(${idx})">
+      <td class="tn">${d['Pit']||'—'}</td>
+      <td>${((d['Area']||d['Keterangan']||'').trim())||'—'}</td>
+      <td>${d['Kontraktor']||'—'}</td>
+      <td class="te" style="color:${eCol(d._elev)}">${fmtE(d._elev)}</td>
+      <td class="te" style="color:${trendCol}">${trendArrow} ${delta!==null?(delta>0?'+':'')+delta.toFixed(3):'—'}</td>
+      <td>${badge(d._sk)}</td>
+      <td style="color:var(--t2)">${d['Kondisi']||d['Status']||'—'}</td>
+      <td style="color:var(--t3);font-size:11px">${fmtD(tglUpdate)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportCSV(){
+  const headers = ['Pit','Area','Kontraktor','Elevasi','Delta','Status','Kondisi','Tgl Update'];
+  const rows = FILTERED.map(d=>[
+    d['Pit']||'',
+    (d['Area']||d['Keterangan']||'').trim(),
+    d['Kontraktor']||'',
+    d._elev!==null?d._elev.toFixed(3):'',
+    d._delta!==null?d._delta.toFixed(3):'',
+    d._sk,
+    d['Kondisi']||'',
+    getEffectiveUpdateDate(d)
+  ]);
+  const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download = `AQUAMIN_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast(`CSV berhasil diunduh (${FILTERED.length} baris)`,'ok');
+}
+
+// System-wide summary report generator, mirrors reportPit() but covers
+// the whole operation — handy for a quick WhatsApp/email update to
+// management without opening the app.
+function copySystemSummary(){
+  if(!DATA.length){ showToast('Data belum dimuat','warn'); return; }
+  const overflow = DATA.filter(d=>d._sk==='overflow');
+  const lumpur = DATA.filter(d=>d._sk==='lumpur');
+  const missing = DATA.filter(d=>d._sk==='missing');
+  const lines = [
+    `📋 RINGKASAN AQUAMIN — ${new Date().toLocaleString('id-ID')}`,
+    `Total Pit: ${DATA.length}`,
+    `Overflow: ${overflow.length} ${overflow.length?'('+overflow.slice(0,5).map(d=>d['Pit']).join(', ')+(overflow.length>5?', ...':'')+')':''}`,
+    `Lumpur: ${lumpur.length}`,
+    `Data Hilang: ${missing.length}`,
+    `Periode Terakhir: ${getWeekLabels().slice(-1)[0]||'—'}`,
+  ];
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(lines.join('\n')).then(()=>showToast('Ringkasan sistem disalin ke clipboard','ok'))
+      .catch(()=>showToast('Gagal menyalin','err'));
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// PDF REPORT EXPORT
+// ─────────────────────────────────────────────────────────────
+// Generates a management-ready PDF snapshot (KPI summary + a table of
+// pits currently needing attention) directly in the browser via jsPDF —
+// no server round-trip needed. Uses whatever the current table filter
+// (FILTERED) shows, so an already-filtered view exports exactly what the
+// user is looking at.
+function exportPDF(){
+  if(!DATA.length){ showToast('Data belum dimuat','warn'); return; }
+  const jsPDFLib = window.jspdf && window.jspdf.jsPDF;
+  if(!jsPDFLib){ showToast('Modul PDF gagal dimuat — periksa koneksi internet','err'); return; }
+
+  const doc = new jsPDFLib({orientation:'landscape',unit:'pt',format:'a4'});
+  const overflow = DATA.filter(d=>d._sk==='overflow');
+  const lumpur = DATA.filter(d=>d._sk==='lumpur');
+  const missing = DATA.filter(d=>d._sk==='missing');
+  const now = new Date();
+
+  doc.setFontSize(18); doc.setFont(undefined,'bold');
+  doc.text('AQUAMIN — Laporan Pemantauan Level Air', 40, 40);
+  doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(90);
+  doc.text(`Dihasilkan: ${now.toLocaleString('id-ID')} · Periode data: ${getWeekLabels().slice(-1)[0]||'—'}`, 40, 58);
+
+  doc.setTextColor(20);
+  doc.setFontSize(11); doc.setFont(undefined,'bold');
+  const kpis = [
+    ['Total Pit', DATA.length],
+    ['Overflow', overflow.length],
+    ['Lumpur', lumpur.length],
+    ['Data Hilang', missing.length],
+  ];
+  let kx = 40;
+  kpis.forEach(([lbl,val])=>{
+    doc.text(`${val}`, kx, 84);
+    doc.setFontSize(8); doc.setFont(undefined,'normal'); doc.setTextColor(110);
+    doc.text(lbl, kx, 96);
+    doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.setTextColor(20);
+    kx += 130;
+  });
+
+  const tableRows = FILTERED.map(d=>[
+    d['Pit']||'—',
+    (d['Area']||d['Keterangan']||'').trim()||'—',
+    d['Kontraktor']||'—',
+    fmtE(d._elev),
+    d._delta!==null?(d._delta>0?'+':'')+d._delta.toFixed(3):'—',
+    SKlbl[d._sk]||'—',
+    fmtD(getEffectiveUpdateDate(d)),
+  ]);
+
+  if(doc.autoTable){
+    doc.autoTable({
+      startY:112,
+      head:[['Pit','Area','Kontraktor','Elevasi (m)','Delta','Status','Tgl Update']],
+      body:tableRows,
+      styles:{fontSize:8,cellPadding:4},
+      headStyles:{fillColor:[59,158,255],textColor:255},
+      alternateRowStyles:{fillColor:[245,248,252]},
+      margin:{left:40,right:40},
+    });
+  }
+
+  doc.save(`AQUAMIN_Laporan_${now.toISOString().slice(0,10)}.pdf`);
+  showToast('📄 Laporan PDF berhasil diunduh','ok');
+}
+
+// ─────────────────────────────────────────────────────────────
+// ANALYSIS
+// ─────────────────────────────────────────────────────────────
+function buildWeeklyAnalysisChart(baseCfg){
+  if(!WEEK_COLS.length){
+    document.getElementById('weekRangeLabel').textContent = '—';
+    document.getElementById('weekPillRow').innerHTML = '';
+    return;
+  }
+  const labels = WEEK_COLS;
+  const displayLabels = getWeekLabels();
+  document.getElementById('weekRangeLabel').textContent = `${labels[0]} – ${labels[labels.length-1]}`;
+
+  const avgPerWeek = [];
+  const overflowPerWeek = [];
+  const countPerWeek = [];
+  WEEK_COLS.forEach(w=>{
+    const valsThisWeek = [];
+    let overflowCount = 0;
+    DATA.forEach(d=>{
+      const v = sanitizeElev(parseFlexNum(d[w]));
+      if(v!==null){
+        valsThisWeek.push(v);
+        if(d._sk==='overflow') overflowCount++;
+      }
+    });
+    avgPerWeek.push(valsThisWeek.length ? valsThisWeek.reduce((a,v)=>a+v,0)/valsThisWeek.length : null);
+    overflowPerWeek.push(overflowCount);
+    countPerWeek.push(valsThisWeek.length);
+  });
+
+  if(charts.weekly) charts.weekly.destroy();
+  charts.weekly = new Chart(document.getElementById('chartWeekly'),{
+    type:'line',
+    data:{
+      labels:displayLabels,
+      datasets:[
+        {
+          label:'Rata-rata Elevasi (m)', data:avgPerWeek, yAxisID:'y',
+          borderColor:'#3B9EFF', backgroundColor:'rgba(59,158,255,.12)',
+          borderWidth:2.5, fill:true, tension:.35, pointRadius:4, pointHoverRadius:7,
+          pointBackgroundColor:'#3B9EFF', spanGaps:true,
+          datalabels:{
+            display:true, color:'#EEF4FF', font:{size:10,weight:'700',family:"'JetBrains Mono',monospace"},
+            anchor:'end', align:'top', offset:4,
+            formatter:(v)=> v!==null? v.toFixed(1)+'m' : '',
+          },
+        },
+        {
+          label:'Pit Overflow', data:overflowPerWeek, yAxisID:'y1',
+          type:'bar', backgroundColor:'rgba(255,79,79,.45)', borderColor:'#FF4F4F', borderWidth:1, borderRadius:3,
+          datalabels:{
+            display:(ctx)=> ctx.dataset.data[ctx.dataIndex]>0,
+            color:'#FF4F4F', font:{size:10,weight:'700'}, anchor:'end', align:'top', offset:2,
+          },
+        },
+      ]
+    },
+    options:{
+      ...baseCfg,
+      interaction:{mode:'index',intersect:false},
+      layout:{padding:{top:20}},
+      plugins:{
+        legend:{labels:{color:'#8BA4C4',font:{size:10},boxWidth:10}},
+        tooltip:{
+          backgroundColor:'rgba(8,14,26,.95)', borderColor:'rgba(59,158,255,.3)', borderWidth:1,
+          titleColor:'#EEF4FF', bodyColor:'#8BA4C4', padding:10,
+          callbacks:{
+            title:(items)=> `Minggu: ${labels[items[0].dataIndex]}`,
+            label:(ctx)=> ctx.dataset.yAxisID==='y'
+              ? `  Rata-rata: ${ctx.raw!==null?ctx.raw.toFixed(3)+'m':'—'} (dari ${countPerWeek[ctx.dataIndex]} pit)`
+              : `  Overflow: ${ctx.raw} pit`,
+          }
+        }
+      },
+      scales:{
+        x:{ticks:{color:'#3E5472',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}},
+        y:{position:'left',ticks:{color:'#3B9EFF',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'Elevasi (m)',color:'#3B9EFF',font:{size:9}}},
+        y1:{position:'right',ticks:{color:'#FF4F4F',font:{size:10},stepSize:1},grid:{display:false},title:{display:true,text:'Jml Overflow',color:'#FF4F4F',font:{size:9}},suggestedMax:Math.max(...overflowPerWeek,4)},
+      }
+    }
+  });
+
+  document.getElementById('weekPillRow').innerHTML = labels.map((w,i)=>{
+    const avg = avgPerWeek[i];
+    const ov = overflowPerWeek[i];
+    return `<div class="week-pill" title="${countPerWeek[i]} pit punya data minggu ini">
+      <div class="wp-label">${w}</div>
+      <div class="wp-val" style="color:${avg!==null?eCol(avg):'var(--t3)'}">${avg!==null?avg.toFixed(1)+'m':'—'}</div>
+      <div class="wp-sub">${ov>0?ov+' overflow':'aman'}</div>
+    </div>`;
+  }).join('');
+}
+
+function buildAnalysis(){
+  const mobile = isMobileViewport();
+  const baseCfg = {
+    responsive:true,maintainAspectRatio:false,resizeDelay:80,
+    animation:{duration:900,easing:'easeOutQuart'},
+    plugins:{legend:{labels:{color:'#8BA4C4',font:{size:10},boxWidth:10}}},
+    scales:{
+      x:{ticks:{color:'#3E5472',font:{size:mobile?9:10}},grid:{color:'rgba(255,255,255,.04)'}},
+      y:{ticks:{color:'#3E5472',font:{size:mobile?9:10}},grid:{color:'rgba(255,255,255,.04)'}}
+    }
+  };
+
+  buildWeeklyAnalysisChart(baseCfg);
+
+  const areas = [...new Set(DATA.map(d=>((d['Area']||d['Keterangan']||'Lainnya').trim().toUpperCase())))].filter(Boolean).sort();
+  const skList = ['overflow','lumpur','normal','missing'];
+  const areaDatasets = skList.map(sk=>({
+    label:SKlbl[sk],
+    data:areas.map(a=>DATA.filter(d=>d._sk===sk&&(d['Area']||d['Keterangan']||'Lainnya').trim().toUpperCase()===a).length),
+    backgroundColor:hexCol[sk]+'CC',borderColor:hexCol[sk],borderWidth:1,borderRadius:3,
+    datalabels:{
+      display:(ctx)=>{
+        const v = ctx.dataset.data[ctx.dataIndex];
+        return v>0;
+      },
+      color:'#0B1220', font:{size:10,weight:'700'}, anchor:'center', align:'center',
+    },
+  }));
+  if(charts.areaStatus) charts.areaStatus.destroy();
+  charts.areaStatus = new Chart(document.getElementById('chartAreaStatus'),{
+    type:'bar',data:{labels:areas.map(a=>a.length>12?a.substring(0,12)+'…':a),datasets:areaDatasets},
+    options:{...baseCfg,scales:{x:{...baseCfg.scales.x,stacked:true},y:{...baseCfg.scales.y,stacked:true}}}
+  });
+
+  const withE = DATA.filter(d=>d._elev!==null).map(d=>d._elev).sort((a,b)=>a-b);
+  const bins=[];const bLabels=[];
+  for(let i=-130;i<=70;i+=20){bins.push(0);bLabels.push(`${i}`)}
+  withE.forEach(v=>{const b=Math.floor((v+130)/20);if(b>=0&&b<bins.length)bins[b]++;});
+  if(charts.elevDist) charts.elevDist.destroy();
+  charts.elevDist = new Chart(document.getElementById('chartElevDist'),{
+    type:'bar',
+    data:{labels:bLabels,datasets:[{
+      label:'Jumlah Pit',data:bins,
+      backgroundColor:bins.map((_,i)=>{const t=i/bins.length;return `rgba(${Math.round(255*(1-t))},${Math.round(t*229)},${Math.round(t*200+59*(1-t))},.85)`}),
+      borderRadius:3,borderSkipped:false,
+      datalabels:{
+        display:(ctx)=> ctx.dataset.data[ctx.dataIndex]>0,
+        color:'#EEF4FF', font:{size:11,weight:'700'}, anchor:'end', align:'top', offset:2,
+      },
+    }]},
+    options:{...baseCfg,plugins:{legend:{display:false}}}
+  });
+
+  const cons = [...new Set(DATA.map(d=>(d['Kontraktor']||'?').trim()))].filter(Boolean).sort();
+  const conAvgs = cons.map(c=>{const es=DATA.filter(d=>(d['Kontraktor']||'').trim()===c&&d._elev!==null).map(d=>d._elev);return es.length?es.reduce((a,v)=>a+v,0)/es.length:null;});
+  if(charts.contractor) charts.contractor.destroy();
+  charts.contractor = new Chart(document.getElementById('chartContractor'),{
+    type:'bar',
+    data:{labels:cons,datasets:[{
+      label:'Rata-rata Elevasi (m)',data:conAvgs,
+      backgroundColor:conAvgs.map(v=>v===null?'#3E547299':v<0?'#FF4F4F99':'#00E5C899'),
+      borderColor:conAvgs.map(v=>v===null?'#3E5472':v<0?'#FF4F4F':'#00E5C8'),
+      borderWidth:1,borderRadius:4,
+      datalabels:{
+        display:(ctx)=> ctx.dataset.data[ctx.dataIndex]!==null,
+        color:'#EEF4FF', font:{size:10,weight:'700',family:"'JetBrains Mono',monospace"},
+        anchor:'end', align:'right', offset:6,
+        formatter:(v)=> v!==null ? (v>0?'+':'')+v.toFixed(1)+'m' : '',
+      },
+    }]},
+    options:{...baseCfg,indexAxis:'y',layout:{padding:{right:46}},plugins:{legend:{display:false}}}
+  });
+
+  const sorted = [...DATA].filter(d=>d._elev!==null).sort((a,b)=>a._elev-b._elev);
+  const allE = sorted.map(d=>d._elev);
+  const gMin = Math.min(...allE), gMax = Math.max(...allE);
+  document.getElementById('gaugeGrid').innerHTML = sorted.map(d=>{
+    const e = d._elev;
+    const pct = gMax===gMin?50:(e-gMin)/(gMax-gMin)*100;
+    const col = hexCol[d._sk];
+    const idx = DATA.indexOf(d);
+    return `<div class="gauge-card" onclick="showDetail(${idx})">
+      <div class="gauge-name" title="${d['Pit']}">${d['Pit']}</div>
+      <svg width="80" height="40" viewBox="0 0 80 40">
+        <path d="M10 35 A30 30 0 0 1 70 35" stroke="#1E2D45" stroke-width="7" fill="none" stroke-linecap="round"/>
+        <path d="M10 35 A30 30 0 0 1 70 35" stroke="${col}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${Math.PI*30}" stroke-dashoffset="${Math.PI*30*(1-pct/100)}" style="transition:stroke-dashoffset .5s;filter:drop-shadow(0 0 4px ${col}66)"/>
+      </svg>
+      <div class="gauge-num" style="color:${col}">${e.toFixed(1)}m</div>
+      <div class="gauge-area">${((d['Area']||d['Keterangan']||'').trim()||'—').substring(0,14)}</div>
+    </div>`;
+  }).join('');
+
+  forceReflow(document.querySelector('#panel-analysis .ana-scroll'));
+}
+
+// ─────────────────────────────────────────────────────────────
+// DETAIL MODAL — with water animation + mini trend
+// ─────────────────────────────────────────────────────────────
+function showDetail(idx){
+  const d = DATA[idx];
+  if(!d) return;
+  const sk = d._sk;
+  const col = hexCol[sk];
+  const elev = d._elev;
+  const tglUpdate = getEffectiveUpdateDate(d);
+
+  document.getElementById('mTitle').innerHTML = `${d['Pit']||'—'} ${badge(sk)}`;
+
+  document.getElementById('mElev').innerHTML = elev!==null
+    ? `<span style="color:${eCol(elev)}">${fmtE(elev)}</span>`
+    : '<span style="color:var(--t3)">—</span>';
+
+  const withE = DATA.filter(x=>x._elev!==null).map(x=>x._elev);
+  const gMin = Math.min(...withE), gMax = Math.max(...withE);
+  let pct = elev!==null&&gMax!==gMin ? Math.max(3,Math.min(97,(elev-gMin)/(gMax-gMin)*100)) : 50;
+
+  const waterFill = document.getElementById('mWaterFill');
+  const waterWaves = document.getElementById('mWaterWaves');
+  const waterLabel = document.getElementById('mWaterLabel');
+  const waterPct = document.getElementById('mWaterPct');
+
+  const waveCol = sk==='overflow'?'#FF4F4F':sk==='lumpur'?'#FFB730':'#0EA5E9';
+  waterFill.style.cssText = `height:0%;background:linear-gradient(180deg,${waveCol}BB,${waveCol}66);`;
+
+  waterWaves.innerHTML = `<svg width="400" height="12" viewBox="0 0 400 12" fill="${waveCol}88" style="animation:waveMove 2s linear infinite">
+    <path d="M0 6 C50 0 100 12 150 6 S250 0 300 6 S350 12 400 6 S450 0 500 6 L500 12 L0 12Z"/>
+    <path d="M0 6 C50 0 100 12 150 6 S250 0 300 6 S350 12 400 6 S450 0 500 6 L500 12 L0 12Z" style="animation-delay:-1s"/>
+  </svg>`;
+
+  waterLabel.textContent = elev!==null ? elev.toFixed(2)+'m' : '';
+  waterPct.textContent = `Relatif: ${pct.toFixed(0)}%`;
+  waterLabel.style.color = eCol(elev);
+
+  setTimeout(()=>{ waterFill.style.transition='height 1.2s cubic-bezier(.34,1.56,.64,1)'; waterFill.style.height = pct+'%'; }, 50);
+
+  document.getElementById('mGaugeFill').style.cssText = `width:${pct}%;background:linear-gradient(90deg,${waveCol},${col})`;
+  document.getElementById('mGaugeMin').textContent = gMin.toFixed(0)+'m';
+  document.getElementById('mGaugeMax').textContent = gMax.toFixed(0)+'m';
+  document.getElementById('mGaugeLbl').textContent = 'Posisi relatif';
+
+  const weekVals = d._weekly;
+  const hasData = weekVals.some(v=>v!==null);
+  if(mTrendChart){mTrendChart.destroy();mTrendChart=null;}
+
+  document.querySelector('.modal-trend').style.display = hasData ? '' : 'none';
+
+  if(hasData){
+    const tCtx = document.getElementById('mTrendChart').getContext('2d');
+    const grad = tCtx.createLinearGradient(0,0,0,100);
+    grad.addColorStop(0,waveCol+'50');
+    grad.addColorStop(1,waveCol+'05');
+
+    const targetElev = parseFlexNum(d['Target Elevasi (m)']);
+    const datasets = [{
+      label:'Level Air',
+      data:weekVals,
+      borderColor:waveCol,
+      backgroundColor:grad,
+      fill:true,tension:0.4,pointRadius:3,pointHoverRadius:5,borderWidth:2,spanGaps:true,
+      pointBackgroundColor:weekVals.map((v,i)=>i===weekVals.filter(x=>x!==null).length-1?waveCol:'transparent'),
+      pointBorderColor:waveCol,
+    }];
+
+    if(targetElev!==null){
+      datasets.push({
+        label:`Target: ${targetElev}m`,
+        data:WEEK_COLS.map(()=>targetElev),
+        borderColor:'#FFB730',borderWidth:1.5,borderDash:[5,4],pointRadius:0,fill:false,spanGaps:true
+      });
+    }
+
+    // Simple linear-trend projection for the next few periods, shown as a
+    // dashed continuation of the actual line — makes "at this rate, this
+    // pit will reach X" visible at a glance instead of requiring mental math.
+    let projLabels = getWeekLabels();
+    if(d._projection && d._projection.values.length){
+      let lastRealIdx=-1;
+      for(let i=weekVals.length-1;i>=0;i--){ if(weekVals[i]!==null){lastRealIdx=i;break;} }
+      if(lastRealIdx>=0){
+        const nProj = d._projection.values.length;
+        const totalLen = weekVals.length+nProj;
+        projLabels = [...getWeekLabels(), ...Array.from({length:nProj},(_,k)=>`+${k+1}mgg`)];
+
+        const projSeries = new Array(totalLen).fill(null);
+        for(let k=0;k<nProj;k++){ projSeries[weekVals.length+k] = d._projection.values[k]; }
+        datasets.push({
+          label:'Proyeksi (tren linear)',
+          data: projSeries,
+          borderColor:'#A78BFA', backgroundColor:'transparent',
+          borderWidth:2, borderDash:[3,3], pointRadius:3, pointStyle:'rectRot',
+          fill:false, spanGaps:false, tension:0,
+        });
+        // Bridge segment connecting the last real point to the first
+        // projected point, so the dashed line visually continues from
+        // actual data instead of appearing to start out of nowhere.
+        const bridgeSeries = new Array(totalLen).fill(null);
+        bridgeSeries[lastRealIdx] = weekVals[lastRealIdx];
+        bridgeSeries[weekVals.length] = d._projection.values[0];
+        datasets.push({
+          label:'_bridge', data: bridgeSeries,
+          borderColor:'#A78BFA', borderWidth:2, borderDash:[3,3], pointRadius:0, fill:false, spanGaps:true,
+          datalabels:{display:false},
+        });
+      }
+    }
+
+    mTrendChart = new Chart(document.getElementById('mTrendChart'),{
+      type:'line',
+      data:{labels:projLabels,datasets},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        animation:{duration:800,easing:'easeInOutCubic'},
+        plugins:{
+          legend:{labels:{color:'#8BA4C4',font:{size:9},boxWidth:8,usePointStyle:true},
+            filter:(item)=> item.text!=='_bridge'},
+          tooltip:{backgroundColor:'rgba(8,14,26,.95)',borderColor:'rgba(59,158,255,.3)',borderWidth:1,titleColor:'#EEF4FF',bodyColor:'#8BA4C4',
+            filter:(item)=>item.dataset.label!=='_bridge',
+            callbacks:{label:ctx=>`${ctx.raw!==null?ctx.raw.toFixed(3)+'m':'—'}`}}
+        },
+        scales:{
+          x:{ticks:{color:'#3E5472',font:{size:9}},grid:{color:'rgba(255,255,255,.04)'}},
+          y:{ticks:{color:'#3E5472',font:{size:9,family:"'JetBrains Mono',monospace"},callback:v=>v+'m'},grid:{color:'rgba(255,255,255,.04)'}}
+        },
+        interaction:{mode:'index',intersect:false}
+      }
+    });
+  }
+
+  const delta = d._delta;
+  const trendIcon = d._trend==='rising'?'▲ Naik':d._trend==='falling'?'▼ Turun':'→ Stabil';
+  const trendCol = d._trend==='rising'?'var(--red)':d._trend==='falling'?'var(--teal)':'var(--t3)';
+  const flds = [
+    {l:'Area / Site',v:((d['Area']||d['Keterangan']||'').trim())||'—'},
+    {l:'Kontraktor',v:d['Kontraktor']||'—'},
+    {l:'Kondisi',v:d['Kondisi']||d['Status']||'—'},
+    {l:'Tgl Update',v:fmtD(tglUpdate)},
+    {l:'Delta Elevasi',v:delta!==null?`<span style="color:${trendCol}">${trendIcon} ${(delta>0?'+':'')+delta.toFixed(3)}m</span>`:'—'},
+    {l:'Target Elevasi',v:(()=>{const t=parseFlexNum(d['Target Elevasi (m)']);return t!==null?t.toFixed(3)+'m':'—'})()},
+    {l:'Proyeksi 3 Periode',v:d._projection?`<span style="color:${d._projection.slope>0?'var(--red)':'var(--teal)'}">${d._projection.slope>0?'▲':'▼'} ${d._projection.values[d._projection.values.length-1].toFixed(2)}m</span> <span style="color:var(--t3);font-weight:400">(est.)</span>`:'— (data belum cukup)'},
+    {l:'Stasiun Hujan Terdekat',v:d._nearestStation?`${d._nearestStation.name} <span style="color:var(--t3);font-weight:400">(~${d._nearestStation.distKm.toFixed(1)} km)</span>`:'—'},
+    {l:'Volume (M³)',v:(()=>{const pv=parseVolume(d['Volume (M3)']);return pv!==null?pv.toLocaleString('id-ID',{maximumFractionDigits:2})+' m³':(d['Volume (M3)']||'—')})()},
+    {l:'Jml Pompa Aktif',v:d['Jumlah Pompa Aktif']||d['Jumlah Pompa']||'—'},
+    {l:'Kondisi Pompa',v:d['Kondisi Pompa']||'—'},
+    {l:'Curah Hujan',v:d['Curah Hujan (mm)']?d['Curah Hujan (mm)']+' mm':'—'},
+    {l:'PIC',v:d['PIC']||d['Penanggung Jawab']||'—'},
+    {l:'Catatan',v:d['Catatan']||'—',full:true},
+    {l:'Koordinat GPS',v:d._ll?`${d._ll[0].toFixed(5)}, ${d._ll[1].toFixed(5)}`:'—',full:true},
+  ];
+  document.getElementById('mFields').innerHTML = flds.map(f=>`<div class="mf ${f.full?'full':''}"><div class="mf-l">${f.l}</div><div class="mf-v">${f.v}</div></div>`).join('');
+
+  const acts = [];
+  if(d._ll) acts.push(`<button class="mact" onclick="goToMap(${idx})"><svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/></svg>Peta</button>`);
+  if(d._ll) acts.push(`<button class="mact primary" onclick="openGMaps(${idx})"><svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 14 8 14s8-8.75 8-14a8 8 0 0 0-8-8z"/></svg>Google Maps</button>`);
+  if(d['Link Foto']||d['link foto']) acts.push(`<button class="mact" onclick="window.open('${d['Link Foto']||d['link foto']}','_blank')">🖼 Foto</button>`);
+  if(d._sk==='overflow') acts.push(`<button class="mact warn" onclick="reportPit(${idx})">⚠ Salin Laporan</button>`);
+  document.getElementById('mActs').innerHTML = acts.join('');
+
+  document.getElementById('detailModal').classList.add('on');
+}
+
+function closeModal(){
+  document.getElementById('detailModal').classList.remove('on');
+}
+document.getElementById('detailModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
+function goToMap(idx){const d=DATA[idx];closeModal();goTab('map');setTimeout(()=>{map.setView(d._ll,16);setTimeout(()=>map.invalidateSize(),80);},100);}
+function openGMaps(idx){const d=DATA[idx];if(d._ll)window.open(`https://maps.google.com/?q=${d._ll[0]},${d._ll[1]}`,'_blank');}
+
+function reportPit(idx){
+  const d=DATA[idx]; if(!d) return;
+  const lines=[
+    `⚠️ LAPORAN OVERFLOW — AQUAMIN`,
+    `Pit: ${d['Pit']||'—'}`,
+    `Area: ${(d['Area']||d['Keterangan']||'—').trim()}`,
+    `Kontraktor: ${d['Kontraktor']||'—'}`,
+    `Elevasi Terkini: ${fmtE(d._elev)} m`,
+    `Delta: ${d._delta!==null?(d._delta>0?'+':'')+d._delta.toFixed(3)+'m':'—'}`,
+    `Tgl Update: ${fmtD(getEffectiveUpdateDate(d))}`,
+    d._ll?`Lokasi: https://maps.google.com/?q=${d._ll[0]},${d._ll[1]}`:'',
+  ].filter(Boolean).join('\n');
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(lines).then(()=>showToast('Laporan disalin — siap paste ke WhatsApp','ok'))
+      .catch(()=>showToast('Gagal menyalin ke clipboard','err'));
+  }else{
+    showToast('Clipboard tidak didukung browser ini','err');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// RAINFALL + WEATHER FORECAST (Open-Meteo)
+// ─────────────────────────────────────────────────────────────
+const RAIN_DAILY_VARS = [
+  'precipitation_sum',
+  'precipitation_probability_max',
+  'relative_humidity_2m_mean',
+  'et0_fao_evapotranspiration',
+  'temperature_2m_max',
+  'temperature_2m_min',
+  'weather_code',
+].join(',');
+
+async function loadRainfall(){
+  document.getElementById('rainUpdated').textContent = 'Memuat...';
+  try{
+    const results = await Promise.all(RAIN_STATIONS.map(async st=>{
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${st.lat}&longitude=${st.lng}&daily=${RAIN_DAILY_VARS}&timezone=Asia%2FMakassar&past_days=7&forecast_days=7`;
+      const r = await fetch(url);
+      const data = await r.json();
+      if(!r.ok || data.error){
+        throw new Error(`Open-Meteo error untuk ${st.name}: ${data.reason || r.status}`);
+      }
+      if(!data.daily || !data.daily.time || !data.daily.time.length){
+        throw new Error(`Open-Meteo tidak mengembalikan data harian untuk ${st.name}`);
+      }
+      return {...st, daily:data.daily};
+    }));
+    const todayStr = new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Makassar'});
+    rainData = {stations:results,updated:new Date(),todayStr};
+    buildRainfallPanel();
+  }catch(e){
+    console.error('Rainfall error:',e);
+    document.getElementById('rainUpdated').textContent = 'Gagal memuat';
+    showToast('Gagal memuat data curah hujan: '+e.message,'err');
+    const stripEl = document.getElementById('rainForecastStrip');
+    if(stripEl) stripEl.innerHTML = `<div style="font-size:12px;color:var(--red);padding:10px">⚠ ${e.message}</div>`;
+  }
+}
+
+function weatherCodeInfo(code){
+  if(code===0) return {icon:'☀️',label:'Cerah'};
+  if([1,2,3].includes(code)) return {icon:'⛅',label:'Berawan'};
+  if([45,48].includes(code)) return {icon:'🌫️',label:'Berkabut'};
+  if([51,53,55,56,57].includes(code)) return {icon:'🌦️',label:'Gerimis'};
+  if([61,63,65,66,67].includes(code)) return {icon:'🌧️',label:'Hujan'};
+  if([80,81,82].includes(code)) return {icon:'🌧️',label:'Hujan Deras'};
+  if([95,96,99].includes(code)) return {icon:'⛈️',label:'Badai Petir'};
+  return {icon:'🌤️',label:'—'};
+}
+
+// Simple flood/overflow-risk heuristic combining forecast rainfall
+// intensity with how many pits are already in a fragile state (overflow
+// or lumpur). This is intentionally transparent (no black-box model) so
+// the numbers behind the verdict are traceable — useful for a monitoring
+// tool where operators need to trust and act on the output.
+function computeRiskIndex(avgForecastMm, maxForecastMm, fragilePitPct){
+  let score = 0;
+  score += Math.min(40, avgForecastMm*2);
+  score += Math.min(30, maxForecastMm*0.6);
+  score += Math.min(30, fragilePitPct*0.6);
+  score = Math.round(Math.min(100,score));
+  let level, col;
+  if(score<25){level='Rendah';col='var(--teal)';}
+  else if(score<50){level='Sedang';col='var(--amber)';}
+  else if(score<75){level='Tinggi';col='var(--red)';}
+  else {level='Sangat Tinggi';col='var(--red)';}
+  return {score,level,col};
+}
+
+function buildRainfallPanel(){
+  if(!rainData.stations) return;
+  const {stations,updated,todayStr} = rainData;
+  document.getElementById('rainUpdated').textContent = `Update: ${updated.toLocaleTimeString('id-ID')}`;
+
+  function splitPastFuture(daily){
+    const times = daily?.time||[];
+    const todayIdx = times.indexOf(todayStr);
+    const cut = todayIdx>=0 ? todayIdx+1 : times.length;
+    const slice = (arr)=> arr ? {past:arr.slice(0,cut), future:arr.slice(cut)} : {past:[],future:[]};
+    return {
+      times:{past:times.slice(0,cut), future:times.slice(cut)},
+      precip: slice(daily?.precipitation_sum),
+      precipProb: slice(daily?.precipitation_probability_max),
+      humidity: slice(daily?.relative_humidity_2m_mean),
+      et0: slice(daily?.et0_fao_evapotranspiration),
+      tmax: slice(daily?.temperature_2m_max),
+      tmin: slice(daily?.temperature_2m_min),
+      wcode: slice(daily?.weather_code),
+    };
+  }
+  const split = stations.map(s=>({...s, _split: splitPastFuture(s.daily)}));
+
+  const todayVals = split.map(s=> +(s._split.precip.past.slice(-1)[0] ?? 0));
+  const maxRain = Math.max(...todayVals,0);
+  const avgRain = (todayVals.reduce((a,v)=>a+v,0)/(todayVals.length||1)).toFixed(1);
+  const maxIdx = todayVals.indexOf(maxRain);
+  const tomorrowVals = split.map(s=> +(s._split.precip.future[0] ?? NaN));
+  const rainTomorrowCount = tomorrowVals.filter(v=>!isNaN(v) && v>0.5).length;
+
+  // Additional analytics: 7-day cumulative rainfall (history), 7-day
+  // cumulative forecast, week-over-week trend, and consecutive dry days —
+  // these give the team a "what's been happening" and "what's coming"
+  // picture beyond a single day's number.
+  const cum7Past = split.map(s => (s._split.precip.past||[]).slice(-7).reduce((a,v)=>a+(+v||0),0));
+  const cum7Future = split.map(s => (s._split.precip.future||[]).slice(0,7).reduce((a,v)=>a+(+v||0),0));
+  const avgCum7Past = cum7Past.reduce((a,v)=>a+v,0)/(cum7Past.length||1);
+  const avgCum7Future = cum7Future.reduce((a,v)=>a+v,0)/(cum7Future.length||1);
+  const wowChangePct = avgCum7Past>0 ? ((avgCum7Future-avgCum7Past)/avgCum7Past*100) : (avgCum7Future>0?100:0);
+
+  function dryStreak(pastArr){
+    let streak=0;
+    for(let i=pastArr.length-1;i>=0;i--){
+      if((+pastArr[i]||0) < 0.5) streak++; else break;
+    }
+    return streak;
+  }
+  const dryStreaks = split.map(s=>dryStreak(s._split.precip.past||[]));
+  const maxDryStreak = Math.max(...dryStreaks,0);
+
+  document.getElementById('kn-rain').textContent = maxRain.toFixed(1)+'mm';
+  document.getElementById('kd-rain').textContent = stations[maxIdx]?.name||'';
+
+  document.getElementById('rainKpiRow').innerHTML = `
+    <div class="rain-kpi"><div class="rain-kpi-n">${maxRain.toFixed(1)}<span style="font-size:12px">mm</span></div><div class="rain-kpi-l">Tertinggi Hari Ini</div></div>
+    <div class="rain-kpi"><div class="rain-kpi-n">${avgRain}<span style="font-size:12px">mm</span></div><div class="rain-kpi-l">Rata-rata Hari Ini</div></div>
+    <div class="rain-kpi"><div class="rain-kpi-n">${rainTomorrowCount}/${stations.length}</div><div class="rain-kpi-l">Stasiun Hujan Besok</div></div>
+    <div class="rain-kpi"><div class="rain-kpi-n">${avgCum7Past.toFixed(0)}<span style="font-size:12px">mm</span></div><div class="rain-kpi-l">Total 7 Hari Lalu</div></div>
+    <div class="rain-kpi"><div class="rain-kpi-n" style="color:${wowChangePct>=0?'var(--red)':'var(--teal)'}">${wowChangePct>=0?'▲':'▼'} ${Math.abs(wowChangePct).toFixed(0)}%</div><div class="rain-kpi-l">Tren vs 7 Hari Depan</div></div>
+    <div class="rain-kpi"><div class="rain-kpi-n">${maxDryStreak}<span style="font-size:12px">hr</span></div><div class="rain-kpi-l">Hari Kering Terlama</div></div>
+  `;
+
+  // ── Risk index & narrative insight card ──
+  const overflowCount = DATA.filter(d=>d._sk==='overflow').length;
+  const lumpurCount = DATA.filter(d=>d._sk==='lumpur').length;
+  const fragilePct = DATA.length ? ((overflowCount+lumpurCount)/DATA.length*100) : 0;
+  const risk = computeRiskIndex(avgCum7Future/7, Math.max(...cum7Future.map(v=>v/7),0), fragilePct);
+  const insightEl = document.getElementById('rainInsightBody');
+  const insightCard = document.getElementById('rainInsightCard');
+  if(insightEl){
+    const stationMostAtRisk = stations[cum7Future.indexOf(Math.max(...cum7Future))];
+    const rows = [
+      `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="font-size:28px;font-weight:900;color:${risk.col}">${risk.score}</div>
+        <div><div style="font-weight:700;color:${risk.col}">Indeks Risiko: ${risk.level}</div><div style="font-size:10px;color:var(--t3)">Kombinasi prakiraan hujan &amp; kondisi pit saat ini (0-100)</div></div>
+      </div>`,
+      `📍 Stasiun dengan prakiraan hujan 7 hari tertinggi: <b>${stationMostAtRisk?.name||'—'}</b> (${Math.max(...cum7Future).toFixed(0)}mm).`,
+      `📈 Total curah hujan 7 hari ke depan diperkirakan <b>${(wowChangePct>=0?'naik':'turun')} ${Math.abs(wowChangePct).toFixed(0)}%</b> dibandingkan 7 hari terakhir.`,
+      fragilePct>0 ? `⚠️ Saat ini ${overflowCount+lumpurCount} pit (${fragilePct.toFixed(0)}%) sudah dalam kondisi overflow/lumpur — kombinasi dengan hujan lanjutan meningkatkan risiko.` : `✓ Tidak ada pit dalam kondisi kritis saat ini, risiko dampak hujan lanjutan relatif rendah.`,
+      rainTomorrowCount>=3 ? `🌧️ ${rainTomorrowCount} dari ${stations.length} stasiun memprakirakan hujan besok — siapkan kapasitas pompa tambahan.` : `🌤️ Mayoritas stasiun memprakirakan cuaca kering/ringan besok.`,
+    ];
+    insightEl.innerHTML = rows.map((r,i)=> i===0? r : `<div style="padding:4px 0;border-bottom:1px dashed rgba(255,255,255,.05)">${r}</div>`).join('');
+    insightCard.style.display = '';
+  }
+
+  const allTimes = split[0]?.daily?.time||[];
+  const todayIdx = allTimes.indexOf(todayStr);
+  const dLabels = allTimes.map((d,i)=>{
+    const dt=new Date(d);
+    const lbl=dt.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});
+    return i===todayIdx ? lbl+' (hari ini)' : lbl;
+  });
+  const rainDatasets = stations.map((s,i)=>{
+    const hue = [200, 330, 95, 25, 270][i%5];
+    const vals = s.daily?.precipitation_sum?.map(v=>v===null||v===undefined?null:+v) || [];
+    return {
+      label:s.name, data:vals,
+      borderColor:`hsl(${hue},85%,62%)`, backgroundColor:`hsla(${hue},85%,62%,.12)`,
+      fill:true, tension:.35, pointRadius:(ctx)=>ctx.dataIndex===todayIdx?6:3,
+      borderWidth:2.5, spanGaps:true,
+      segment:{ borderDash: ctx => ctx.p1DataIndex>todayIdx ? [6,4] : undefined },
+      datalabels:{
+        display:(ctx)=> ctx.dataIndex===todayIdx,
+        color:`hsl(${hue},85%,72%)`, font:{size:10,weight:'700',family:"'JetBrains Mono',monospace"},
+        anchor:'end', align:'top', offset:4,
+        formatter:(v)=> v!==null ? v.toFixed(1)+'mm' : '',
+      },
+    };
+  });
+  if(charts.rain) charts.rain.destroy();
+  charts.rain = new Chart(document.getElementById('chartRain'),{
+    type:'line',data:{labels:dLabels,datasets:rainDatasets},
+    options:{responsive:true,maintainAspectRatio:false,resizeDelay:80,animation:{duration:800,easing:'easeOutQuart'},
+      layout:{padding:{top:24}},
+      interaction:{mode:'nearest',intersect:false},
+      plugins:{
+        legend:{labels:{color:'#8BA4C4',font:{size:10},boxWidth:8,usePointStyle:true}},
+        tooltip:{callbacks:{footer:(items)=> items[0]?.dataIndex>todayIdx ? '📡 Prakiraan' : '✓ Tercatat'}},
+      },
+      scales:{x:{ticks:{color:'#3E5472',font:{size:9},maxRotation:45,minRotation:45},grid:{color:(ctx)=>ctx.index===todayIdx?'rgba(59,158,255,.5)':'rgba(255,255,255,.04)'}},
+              y:{ticks:{color:'#3E5472',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'},min:0,title:{display:true,text:'mm',color:'#3E5472',font:{size:10}}}}}
+  });
+
+  document.getElementById('rainForecastStrip').innerHTML = stations.map((s,i)=>{
+    const sp = split[i]._split;
+    const days = sp.times.future.map((t,j)=>{
+      const dt = new Date(t);
+      const wc = weatherCodeInfo(sp.wcode.future[j]);
+      const precip = sp.precip.future[j];
+      const prob = sp.precipProb.future[j];
+      return `<div class="forecast-day">
+        <div class="fd-date">${dt.toLocaleDateString('id-ID',{weekday:'short'})}</div>
+        <div class="fd-icon">${wc.icon}</div>
+        <div class="fd-precip">${precip!==undefined&&precip!==null?(+precip).toFixed(1)+'mm':'—'}</div>
+        <div class="fd-prob">${prob!==undefined&&prob!==null?Math.round(prob)+'%':''}</div>
+      </div>`;
+    }).join('');
+    return `<div class="forecast-station">
+      <div class="forecast-station-name">${s.name} <span style="color:var(--t3);font-weight:400">· total 7hr: ${cum7Future[i].toFixed(0)}mm</span></div>
+      <div class="forecast-days">${days || '<span style="color:var(--t3);font-size:11px">Forecast tidak tersedia</span>'}</div>
+    </div>`;
+  }).join('');
+
+  function rainIntensity(mm){
+    if(mm===0) return{lbl:'Tidak Hujan',col:'var(--t3)'};
+    if(mm<5) return{lbl:'Gerimis',col:'var(--blue)'};
+    if(mm<20) return{lbl:'Hujan Ringan',col:'var(--purple)'};
+    if(mm<50) return{lbl:'Hujan Sedang',col:'var(--amber)'};
+    return{lbl:'Hujan Lebat',col:'var(--red)'};
+  }
+
+  document.getElementById('rainStations').innerHTML = stations.map((s,i)=>{
+    const sp = split[i]._split;
+    const val = todayVals[i];
+    const week = (sp.precip.past||[]).reduce((a,v)=>a+(+v||0),0);
+    const inten = rainIntensity(val);
+    const humidity = sp.humidity.past.slice(-1)[0];
+    const et0 = sp.et0.past.slice(-1)[0];
+    const tomorrowPrecip = sp.precip.future[0];
+    const tomorrowWc = weatherCodeInfo(sp.wcode.future[0]);
+    return `<div class="rain-station">
+      <div class="rain-icon">🌧</div>
+      <div class="rain-body">
+        <div class="rain-loc">${s.name}</div>
+        <div class="rain-val">${val.toFixed(1)}<span style="font-size:11px;color:var(--t3)"> mm</span></div>
+        <div class="rain-meta">7 hari terakhir: ${week.toFixed(1)} mm total · 7 hari depan: ${cum7Future[i].toFixed(0)}mm</div>
+        <div class="rain-extra-row">
+          ${humidity!=null?`<span class="rain-chip" title="Kelembaban relatif">💧 ${(+humidity).toFixed(0)}%</span>`:''}
+          ${et0!=null?`<span class="rain-chip" title="Evapotranspirasi (penguapan air)">♨️ ${(+et0).toFixed(1)}mm</span>`:''}
+          <span class="rain-chip" title="Hari kering berturut-turut">🏜️ ${dryStreaks[i]} hr kering</span>
+        </div>
+        <div class="rain-tomorrow">Besok: ${tomorrowWc.icon} ${tomorrowPrecip!=null?(+tomorrowPrecip).toFixed(1)+'mm':'—'}</div>
+      </div>
+      <div><span class="rain-intensity" style="background:${inten.col}22;color:${inten.col}">${inten.lbl}</span></div>
+    </div>`;
+  }).join('');
+
+  forceReflow(document.querySelector('#panel-rainfall .rain-scroll'));
+  buildCorrelationCard();
+}
+
+// ─────────────────────────────────────────────────────────────
+// RAINFALL ↔ PIT CORRELATION CARD
+// ─────────────────────────────────────────────────────────────
+// Ranks pits by a simple, transparent "watch list" score: pits whose
+// nearest rain station has a wetter 7-day forecast AND whose own elevation
+// trend is already rising get surfaced first — this is the concrete,
+// per-pit version of the general rainfall risk index shown above it.
+function buildCorrelationCard(){
+  const card = document.getElementById('correlationCard');
+  const body = document.getElementById('correlationBody');
+  if(!card||!body) return;
+  if(!DATA.length || !rainData.stations){
+    card.style.display='none';
+    return;
+  }
+  const stationForecast = {};
+  rainData.stations.forEach(s=>{
+    const todayIdx = s.daily.time.indexOf(rainData.todayStr);
+    const cut = todayIdx>=0?todayIdx+1:s.daily.time.length;
+    const future = (s.daily.precipitation_sum||[]).slice(cut).slice(0,7).map(v=>+v||0);
+    stationForecast[s.name] = future.reduce((a,v)=>a+v,0);
+  });
+  const maxStationForecast = Math.max(...Object.values(stationForecast),1);
+
+  const candidates = DATA.filter(d=>d._nearestStation && d._elev!==null).map(d=>{
+    const stationMm = stationForecast[d._nearestStation.name]||0;
+    const wetnessScore = stationMm/maxStationForecast; // 0..1
+    const trendScore = d._trend==='rising'?1:d._trend==='stable'?0.4:0;
+    const alreadyFragile = (d._sk==='overflow'||d._sk==='lumpur')?1:0;
+    const score = wetnessScore*0.5 + trendScore*0.3 + alreadyFragile*0.2;
+    return {d, stationMm, score};
+  }).sort((a,b)=>b.score-a.score).slice(0,6);
+
+  if(!candidates.length){
+    card.style.display='none';
+    return;
+  }
+  card.style.display='';
+  body.innerHTML = candidates.map(({d,stationMm,score})=>{
+    const idx = DATA.indexOf(d);
+    const level = score>0.6?{lbl:'Tinggi',col:'var(--red)'}:score>0.35?{lbl:'Sedang',col:'var(--amber)'}:{lbl:'Rendah',col:'var(--teal)'};
+    return `<div class="risk-item" onclick="showDetail(${idx})" style="cursor:pointer">
+      <span class="ri-badge" style="background:${level.col}22;color:${level.col}">${level.lbl}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700">${d['Pit']}</div>
+        <div style="font-size:10px;color:var(--t3)">Stasiun terdekat: ${d._nearestStation.name} (${d._nearestStation.distKm.toFixed(1)}km) · Prakiraan 7hr: ${stationMm.toFixed(0)}mm · Tren: ${d._trend==='rising'?'▲ Naik':d._trend==='falling'?'▼ Turun':'→ Stabil'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+// TABS
+// ─────────────────────────────────────────────────────────────
+if('IntersectionObserver' in window){
+  const panelObserver = new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
+      if(!entry.isIntersecting) return;
+      if(entry.target.id==='panel-analysis') setTimeout(resizeAllCharts,60);
+      if(entry.target.id==='panel-rainfall') setTimeout(resizeRainCharts,60);
+    });
+  },{threshold:0.1});
+  onDomReady(()=>{
+    ['panel-analysis','panel-rainfall'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) panelObserver.observe(el);
+    });
+  });
+}
+
+function goTab(name){
+  activeTab = name;
+  const tabNames = ['dashboard','trend','map','table','analysis','rainfall'];
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('on',tabNames[i]===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id==='panel-'+name));
+  if(name==='dashboard'){
+    const nb=document.getElementById('notifBtn');
+    if(nb) nb.classList.remove('has-alert');
+  }
+  if(name==='map'){
+    setTimeout(()=>{
+      map.invalidateSize();
+      // Re-affirm the auto-zoom-to-AOI behavior every time the Peta tab is
+      // opened, not only on first data load — this covers the common case
+      // of a user switching tabs and coming back expecting the map to
+      // already be framed on the mine area instead of a stale/zoomed-out view.
+      fitMap();
+    },80);
+  }
+  if(name==='rainfall'){
+    if(!rainData.stations) loadRainfall();
+    else{
+      // IMPORTANT: rainfall data is often fetched in the background right
+      // after page load (loadData().then(loadRainfall())), while the
+      // Curah Hujan panel is still hidden (display:none) because another
+      // tab is active. A Chart.js canvas created inside a hidden container
+      // measures 0×0 and, in this Chart.js version, does not reliably
+      // recover just by calling .resize() later — the result is exactly
+      // what was reported: an empty/garbled chart area once the tab is
+      // opened. The reliable fix (same pattern already used for the
+      // Analisis tab) is to fully rebuild the panel — destroy and recreate
+      // the chart — now that the container is actually visible and has a
+      // real measured size.
+      setTimeout(buildRainfallPanel,30);
+    }
+  }
+  if(name==='trend'&&DATA.length) buildTrendPanel();
+  if(name==='analysis'&&DATA.length){
+    setTimeout(buildAnalysis,30);
+  }
+}
+
+function resizeAllCharts(){
+  Object.values(charts||{}).forEach(c=>{ if(c&&c.resize) c.resize(); });
+  Object.values(sparkCharts||{}).forEach(c=>{ if(c&&c.resize) c.resize(); });
+  if(mTrendChart&&mTrendChart.resize) mTrendChart.resize();
+}
+function resizeRainCharts(){
+  if(charts.rain&&charts.rain.resize) charts.rain.resize();
+}
+
+// ─────────────────────────────────────────────────────────────
+// CHART MAXIMIZE (fullscreen view)
+// ─────────────────────────────────────────────────────────────
+const CHART_REGISTRY = {
+  weekly:      ()=>({chart:charts.weekly,      title:'Analisis per Minggu',                    sub:'Rata-rata elevasi dan jumlah pit overflow tiap periode'}),
+  areaStatus:  ()=>({chart:charts.areaStatus,  title:'Distribusi Status Pit per Area',        sub:'Perbandingan kondisi tiap area operasional'}),
+  elevDist:    ()=>({chart:charts.elevDist,    title:'Sebaran Elevasi Level Air',              sub:'Distribusi elevasi seluruh pit (mdpl)'}),
+  contractor:  ()=>({chart:charts.contractor,  title:'Perbandingan Elevasi per Kontraktor',    sub:'Rata-rata elevasi level air per kontraktor'}),
+  rain:        ()=>({chart:charts.rain,        title:'Curah Hujan — Histori & Prakiraan',      sub:'Garis solid = tercatat, garis putus-putus = prakiraan'}),
+  trendMain:   ()=>({chart:charts.trendMain,   title:'Tren Level Air — Riwayat Pengukuran',    sub:'Seluruh pit, data periode lengkap'}),
+};
+
+let chartModalInstance = null;
+
+function maximizeChart(key){
+  const entry = CHART_REGISTRY[key] && CHART_REGISTRY[key]();
+  if(!entry || !entry.chart){
+    showToast('Grafik belum siap, coba lagi sesaat','warn');
+    return;
+  }
+  document.getElementById('chartModalTitle').textContent = entry.title;
+  document.getElementById('chartModalSub').textContent = entry.sub;
+  document.getElementById('chartModal').classList.add('on');
+
+  const src = entry.chart;
+  const clonedData = JSON.parse(JSON.stringify(src.config.data));
+  const clonedOptions = JSON.parse(JSON.stringify(src.config.options||{}));
+  clonedOptions.animation = {duration:400};
+  clonedOptions.maintainAspectRatio = false;
+  clonedOptions.responsive = true;
+
+  if(chartModalInstance) chartModalInstance.destroy();
+  const body = document.querySelector('.chart-modal-body');
+  body.innerHTML = '<canvas id="chartModalCanvas"></canvas>';
+  chartModalInstance = new Chart(document.getElementById('chartModalCanvas'), {
+    type: src.config.type,
+    data: clonedData,
+    options: clonedOptions,
+  });
+}
+
+function closeChartModal(){
+  document.getElementById('chartModal').classList.remove('on');
+  if(chartModalInstance){ chartModalInstance.destroy(); chartModalInstance=null; }
+}
+document.getElementById('chartModal').addEventListener('click', e=>{
+  if(e.target===e.currentTarget) closeChartModal();
+});
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') closeChartModal();
+});
+
+// ─────────────────────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg,type='ok'){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast on ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('on'),3500);
+}
+
+// ─────────────────────────────────────────────────────────────
+// OVERFLOW NOTIFICATIONS
+// ─────────────────────────────────────────────────────────────
+// Lets the user opt in to browser notifications so a newly-overflowing pit
+// is surfaced immediately — including while AQUAMIN is auto-refreshing in
+// a background tab — instead of only being visible if someone happens to
+// be looking at the dashboard at that moment.
+function updateNotifBtnUI(){
+  const btn = document.getElementById('notifBtn');
+  if(!btn) return;
+  btn.classList.toggle('on', notificationsEnabled);
+  btn.title = notificationsEnabled ? 'Notifikasi overflow aktif — klik untuk nonaktifkan' : 'Aktifkan notifikasi overflow';
+}
+function toggleNotifications(){
+  if(!('Notification' in window)){
+    showToast('Browser ini tidak mendukung notifikasi','warn');
+    return;
+  }
+  if(!notificationsEnabled){
+    Notification.requestPermission().then(perm=>{
+      if(perm==='granted'){
+        notificationsEnabled = true;
+        try{ localStorage.setItem('aquamin_notif','1'); }catch(e){}
+        showToast('🔔 Notifikasi overflow diaktifkan','ok');
+      }else{
+        showToast('Izin notifikasi ditolak oleh browser','warn');
+      }
+      updateNotifBtnUI();
+    });
+  }else{
+    notificationsEnabled = false;
+    try{ localStorage.setItem('aquamin_notif','0'); }catch(e){}
+    showToast('Notifikasi overflow dinonaktifkan','ok');
+    updateNotifBtnUI();
+  }
+}
+// Compares the current set of overflow pits against the last known set.
+// The very first call after page load only records a baseline (so the
+// user isn't bombarded with alerts for pre-existing overflow pits the
+// moment the app opens) — only pits that newly ENTER overflow status on
+// a later sync trigger an alert.
+function checkOverflowAlerts(){
+  const currentIds = new Set(DATA.filter(d=>d._sk==='overflow').map(d=>(d['Pit']||'')+'|'+(d['Area']||d['Keterangan']||'')));
+  if(previousOverflowIds===null){
+    previousOverflowIds = currentIds;
+    return;
+  }
+  const newlyOverflowing = [...currentIds].filter(id=>!previousOverflowIds.has(id));
+  previousOverflowIds = currentIds;
+  const btn = document.getElementById('notifBtn');
+  if(newlyOverflowing.length){
+    if(btn) btn.classList.add('has-alert');
+    const names = newlyOverflowing.map(id=>id.split('|')[0]).slice(0,3).join(', ');
+    showToast(`⚠ Pit baru overflow: ${names}${newlyOverflowing.length>3?` (+${newlyOverflowing.length-3} lainnya)`:''}`,'err');
+    if(notificationsEnabled && 'Notification' in window && Notification.permission==='granted'){
+      try{
+        new Notification('⚠️ AQUAMIN — Pit Overflow Baru', {
+          body: `${newlyOverflowing.length} pit baru masuk status overflow: ${names}`,
+          icon: 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath fill=\'%23FF4F4F\' d=\'M12 2C6.5 2 3 7 3 12s3.5 10 9 10 9-5 9-10S17.5 2 12 2z\'/%3E%3C/svg%3E',
+        });
+      }catch(e){ console.warn('Notification failed:',e); }
+    }
+  }
+}
+onDomReady(updateNotifBtnUI);
+
+// ─────────────────────────────────────────────────────────────
+// AUTO REFRESH
+// ─────────────────────────────────────────────────────────────
+setInterval(()=>{ loadData(); loadRainfall(); }, AUTO_REFRESH_MS);
+
+// ─────────────────────────────────────────────────────────────
+// KEYBOARD SHORTCUTS (desktop power users)
+// ─────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  const map2 = {'1':'dashboard','2':'trend','3':'map','4':'table','5':'analysis','6':'rainfall'};
+  if(map2[e.key]) goTab(map2[e.key]);
+});
+
+// ─────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────
+// Frame the map on the known AOI (rainfall station bounds) immediately on
+// first paint, before any pit data has loaded — so the map is never seen
+// sitting at the generic default view even for a moment.
+fitMap();
+loadData().then(()=>loadRainfall());
+</script>
+</body>
+</html>
